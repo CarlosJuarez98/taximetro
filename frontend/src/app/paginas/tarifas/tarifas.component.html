@@ -1,0 +1,43 @@
+<section class="tarifas">
+  <h1>Tarifa</h1>
+  @if (error) { <p class="error">{{ error }}</p> }
+  @if (ok) { <p class="ok">{{ ok }}</p> }
+
+  @if (tarifa) {
+    <form class="card form" (ngSubmit)="guardar()">
+      <label>Nombre
+        <input [(ngModel)]="tarifa.nombre" name="nombre" />
+      </label>
+      <label>Banderazo ($)
+        <input type="number" step="0.5" [(ngModel)]="tarifa.banderazo" name="banderazo" />
+      </label>
+      <label>Precio por km ($)
+        <input type="number" step="0.05" [(ngModel)]="tarifa.precioPorKm" name="precioPorKm" />
+      </label>
+      <label>Espera por minuto ($)
+        <input type="number" step="0.1" [(ngModel)]="tarifa.precioEsperaMinuto" name="espera" />
+      </label>
+      <label>Tarifa mínima ($)
+        <input type="number" step="0.5" [(ngModel)]="tarifa.tarifaMinima" name="minima" />
+      </label>
+
+      <div class="bloque-noche">
+        <p class="noche-titulo">Tarifa nocturna</p>
+        <label>Recargo nocturno (%)
+          <input type="number" step="1" min="0" [(ngModel)]="tarifa.recargoNocturnoPct" name="nochePct" />
+        </label>
+        <div class="dos">
+          <label>Desde (hora)
+            <input type="number" min="0" max="23" [(ngModel)]="tarifa.nocheDesdeHora" name="desde" />
+          </label>
+          <label>Hasta (hora)
+            <input type="number" min="0" max="23" [(ngModel)]="tarifa.nocheHastaHora" name="hasta" />
+          </label>
+        </div>
+        <p class="muted noche-hint">Ejemplo: 22 → 6 y 20% = de 10 pm a 6 am cobras 20% más.</p>
+      </div>
+
+      <button type="submit" class="btn btn-acento" [disabled]="guardando">Guardar tarifa</button>
+    </form>
+  }
+</section>

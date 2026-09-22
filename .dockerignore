@@ -1,0 +1,12 @@
+**/node_modules
+**/target
+**/dist
+**/.angular
+**/.git
+**/data
+**/*.md
+**/*.log
+**/*.bat
+.env.cloud
+wallet
+wallet-local

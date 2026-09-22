@@ -1,0 +1,86 @@
+package com.taxi.modelo;
+
+import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.LocalDate;
+
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
+
+@Entity
+@Table(name = "TX_CAJA_DIA", uniqueConstraints = @UniqueConstraint(columnNames = "fecha"))
+public class CajaDia {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @Column(nullable = false)
+    private LocalDate fecha;
+
+    /** Billete / cambio con el que arrancas el día. */
+    @Column(nullable = false, precision = 12, scale = 2)
+    private BigDecimal fondoInicial = BigDecimal.ZERO;
+
+    /** Conteo físico al hacer el corte (null = aún no cortado). */
+    @Column(precision = 12, scale = 2)
+    private BigDecimal conteoReal;
+
+    private Instant cortadaEn;
+
+    @Column(length = 240)
+    private String notas;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
+
+    public LocalDate getFecha() {
+        return fecha;
+    }
+
+    public void setFecha(LocalDate fecha) {
+        this.fecha = fecha;
+    }
+
+    public BigDecimal getFondoInicial() {
+        return fondoInicial;
+    }
+
+    public void setFondoInicial(BigDecimal fondoInicial) {
+        this.fondoInicial = fondoInicial;
+    }
+
+    public BigDecimal getConteoReal() {
+        return conteoReal;
+    }
+
+    public void setConteoReal(BigDecimal conteoReal) {
+        this.conteoReal = conteoReal;
+    }
+
+    public Instant getCortadaEn() {
+        return cortadaEn;
+    }
+
+    public void setCortadaEn(Instant cortadaEn) {
+        this.cortadaEn = cortadaEn;
+    }
+
+    public String getNotas() {
+        return notas;
+    }
+
+    public void setNotas(String notas) {
+        this.notas = notas;
+    }
+}

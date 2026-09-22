@@ -1,0 +1,145 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  min-height: 100svh;
+  width: 100%;
+  max-width: 100%;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: calc(0.4rem + var(--safe-top)) 0.7rem 0.4rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--rojo) 35%, transparent);
+  background: color-mix(in srgb, #070708 92%, transparent);
+  backdrop-filter: blur(16px);
+  position: sticky;
+  top: 0;
+  z-index: 30;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.logo-ring {
+  position: relative;
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  padding: 2px;
+  background: linear-gradient(135deg, #ff7a85, var(--rojo), #7a0010);
+  box-shadow:
+    0 0 0 1px rgba(255, 30, 50, 0.35),
+    0 0 24px var(--rojo-glow),
+    0 8px 16px rgba(0, 0, 0, 0.45);
+  animation: logoPulse 2.8s ease-in-out infinite;
+}
+
+.brand-logo {
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  object-fit: cover;
+  display: block;
+  background: #0a0a0c;
+}
+
+.brand-txt {
+  min-width: 0;
+}
+
+.brand-mark {
+  margin: 0;
+  font-family: Oswald, sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: clamp(0.92rem, 4.2vw, 1.05rem);
+  line-height: 1.05;
+  color: #fff;
+  text-shadow: 0 0 18px rgba(255, 30, 50, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.brand-sub {
+  margin: 0.15rem 0 0;
+  color: var(--texto-suave);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+main {
+  flex: 1 0 auto;
+  width: 100%;
+  max-width: 100%;
+  padding: 0.5rem 0.6rem 0.85rem;
+  /* Sin overflow propio: scrollea el body (móvil OK) */
+  overflow: visible;
+}
+
+.nav-dock {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.2rem;
+  flex: 0 0 auto;
+  padding: 0.3rem 0.35rem calc(0.35rem + var(--safe-bottom));
+  border-top: 1px solid var(--linea);
+  background: color-mix(in srgb, #0c0a0d 96%, var(--rojo));
+  position: sticky;
+  bottom: 0;
+  z-index: 40;
+}
+
+.nav-dock a {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.08rem;
+  min-height: var(--touch);
+  padding: 0.3rem 0.1rem;
+  border-radius: 0.65rem;
+  color: var(--texto-suave);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.7rem;
+  user-select: none;
+}
+
+.nav-dock a.activo {
+  color: #fff;
+  background: linear-gradient(135deg, #ff5a67, var(--rojo));
+  box-shadow: 0 6px 16px var(--rojo-glow);
+}
+
+.dock-ico { font-size: 0.95rem; }
+
+@keyframes logoPulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(255, 30, 50, 0.35), 0 0 18px rgba(255, 30, 50, 0.35), 0 8px 16px rgba(0,0,0,.45); }
+  50% { box-shadow: 0 0 0 1px rgba(255, 30, 50, 0.55), 0 0 30px rgba(255, 30, 50, 0.55), 0 8px 16px rgba(0,0,0,.45); }
+}
+
+@media (min-width: 900px) {
+  .logo-ring {
+    width: 58px;
+    height: 58px;
+  }
+
+  main {
+    padding: 0.85rem 1.2rem 1rem;
+    max-width: 720px;
+    width: 100%;
+    margin: 0 auto;
+  }
+}

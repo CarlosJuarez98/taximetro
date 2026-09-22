@@ -1,0 +1,142 @@
+.agenda {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.cabeza {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+h1 {
+  font-size: 1.15rem;
+}
+
+h2 {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+  color: var(--texto-suave);
+  letter-spacing: 0.08em;
+}
+
+.label {
+  margin: 0 0 0.35rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: var(--texto-suave);
+}
+
+.form {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.dos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--texto);
+  font-size: 0.88rem;
+}
+
+.check input {
+  width: auto;
+  min-height: auto;
+}
+
+.aviso-conflicto {
+  margin: 0;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.55rem;
+  background: color-mix(in srgb, var(--rojo) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rojo) 45%, var(--linea));
+  color: #ffc4c8;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.propuestas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.45rem;
+  align-items: center;
+}
+
+.badge-pend {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, #f5a623 35%, transparent);
+  color: #ffd89a;
+  margin-bottom: 0.25rem;
+}
+
+.fila.pendiente {
+  border-color: color-mix(in srgb, #f5a623 40%, var(--linea));
+}
+
+.acciones-form {
+  display: grid;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
+}
+
+.lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.fila {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  align-items: flex-start;
+}
+
+.fila.conflicto {
+  border-color: color-mix(in srgb, var(--rojo) 55%, var(--linea));
+}
+
+.izq {
+  min-width: 0;
+}
+
+.izq p,
+.izq strong {
+  margin: 0;
+}
+
+.izq p {
+  font-size: 0.86rem;
+  margin-top: 0.15rem;
+}
+
+.der {
+  display: grid;
+  gap: 0.3rem;
+  flex: 0 0 auto;
+}
+
+.mini {
+  padding: 0.4rem 0.55rem;
+  font-size: 0.75rem;
+  min-height: 2.2rem;
+}

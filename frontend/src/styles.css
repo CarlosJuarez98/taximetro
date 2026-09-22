@@ -1,0 +1,156 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=Oswald:wght@600;700&display=swap');
+
+:root {
+  --fondo: #070708;
+  --superficie: #121014;
+  --superficie-2: #1c171c;
+  --texto: #fff5f6;
+  --texto-suave: #c4a8ae;
+  --rojo: #ff1e32;
+  --rojo-2: #ff4d5c;
+  --rojo-glow: rgba(255, 30, 50, 0.45);
+  --acento: var(--rojo);
+  --acento-2: #2dd4a8;
+  --peligro: #ff5a4f;
+  --linea: #3a2830;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --r: 0.85rem;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --touch: 44px;
+}
+
+* { box-sizing: border-box; }
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background:
+    radial-gradient(90% 55% at 85% -5%, rgba(255, 30, 50, 0.38), transparent 55%),
+    radial-gradient(70% 45% at 0% 100%, rgba(255, 30, 50, 0.14), transparent 50%),
+    #070708;
+  color: var(--texto);
+  font-family: Manrope, system-ui, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+  /* Scroll de página (el que funciona bien en móvil) */
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+app-root {
+  display: block;
+  min-height: 100dvh;
+  min-height: 100svh;
+}
+
+button, a, .modo, .btn-espera {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button, input { font: inherit; }
+button { cursor: pointer; }
+
+h1, h2 {
+  font-family: Oswald, sans-serif;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.card {
+  background: linear-gradient(160deg, color-mix(in srgb, var(--superficie) 96%, #fff 2%), var(--superficie));
+  border: 1px solid color-mix(in srgb, var(--rojo) 22%, var(--linea));
+  border-radius: var(--r);
+  padding: 0.7rem 0.75rem;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+input, textarea, select {
+  width: 100%;
+  background: var(--superficie-2);
+  border: 1px solid var(--linea);
+  color: var(--texto);
+  border-radius: 0.6rem;
+  padding: 0.65rem 0.7rem;
+  font-size: 16px;
+  min-height: var(--touch);
+}
+
+input:focus {
+  outline: none;
+  border-color: color-mix(in srgb, var(--rojo) 70%, var(--linea));
+  box-shadow: 0 0 0 2px rgba(255, 30, 50, 0.2);
+}
+
+input[type='number'] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+input[type='number']::-webkit-outer-spin-button,
+input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+label {
+  display: grid;
+  gap: 0.22rem;
+  font-size: 0.78rem;
+  color: var(--texto-suave);
+  font-weight: 600;
+}
+
+.btn {
+  border: 0;
+  border-radius: 0.75rem;
+  padding: 0.75rem 0.9rem;
+  font-weight: 800;
+  min-height: var(--touch);
+  transition: transform 0.12s var(--ease-out), filter 0.12s var(--ease-out);
+}
+
+.btn:active { transform: scale(0.98); }
+
+.btn-acento {
+  background: linear-gradient(135deg, #ff5a67, var(--rojo));
+  color: #fff;
+  box-shadow: 0 8px 22px var(--rojo-glow);
+}
+
+.btn-ok {
+  background: var(--acento-2);
+  color: #052419;
+}
+
+.btn-peligro {
+  background: color-mix(in srgb, var(--peligro) 90%, #000);
+  color: #fff;
+}
+
+.btn-seco {
+  background: var(--superficie-2);
+  color: var(--texto);
+  border: 1px solid var(--linea);
+}
+
+.muted { color: var(--texto-suave); }
+.error { color: #ffb4ac; margin: 0.2rem 0; font-size: 0.86rem; }
+.ok { color: #9be7c8; }
+
+@media (max-width: 420px) {
+  .card { padding: 0.6rem 0.65rem; }
+}

@@ -1,0 +1,7 @@
+# Bloque para el Caddy compartido en la VM (productos-limpieza/Caddyfile).
+# Pegar o concatenar en ~ /productos-limpieza/Caddyfile
+
+taxi.163.192.146.143.sslip.io {
+	encode gzip
+	reverse_proxy taximetro-api:8084
+}

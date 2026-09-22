@@ -1,0 +1,39 @@
+.tarifas {
+  display: grid;
+  gap: 0.55rem;
+}
+
+h1 { font-size: 1.15rem; }
+
+.form {
+  display: grid;
+  gap: 0.55rem;
+}
+
+.dos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
+.bloque-noche {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0.6rem;
+  border-radius: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--rojo) 40%, var(--linea));
+  background: color-mix(in srgb, var(--rojo) 10%, transparent);
+}
+
+.noche-titulo {
+  margin: 0;
+  font-family: Oswald, sans-serif;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.88rem;
+}
+
+.noche-hint {
+  margin: 0;
+  font-size: 0.76rem;
+}

@@ -1,0 +1,35 @@
+# Despliegue en Oracle Cloud (Ampere/ARM).
+# Por ahora misma BD que local: H2 en volumen (sandbox→prod sin ATP).
+# Uso: docker compose -f docker-compose.cloud.yml --env-file .env.cloud up -d --build
+#
+# HTTPS: Caddy compartido (productos-limpieza :80/:443)
+# https://taxi.163.192.146.143.sslip.io/ → taximetro-api:8084
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: taximetro-api
+    expose:
+      - "8084"
+    env_file:
+      - .env.cloud
+    environment:
+      SERVER_PORT: "8084"
+      SPRING_DATASOURCE_URL: jdbc:h2:file:/app/data/taxi;DB_CLOSE_DELAY=-1;AUTO_SERVER=FALSE
+      SPRING_DATASOURCE_USERNAME: sa
+      SPRING_DATASOURCE_PASSWORD: ""
+      SPRING_DATASOURCE_DRIVER_CLASS_NAME: org.h2.Driver
+      SPRING_JPA_DATABASE_PLATFORM: org.hibernate.dialect.H2Dialect
+      SPRING_H2_CONSOLE_ENABLED: "false"
+      APP_CORS_ALLOWED_ORIGIN_PATTERNS: ${APP_CORS_ALLOWED_ORIGIN_PATTERNS:-https://taxi.163.192.146.143.sslip.io}
+      JAVA_OPTS: "-Xms128m -Xmx384m -Dfile.encoding=UTF-8"
+      LOGGING_LEVEL_COM_TAXI: INFO
+    volumes:
+      - taximetro-h2:/app/data
+    mem_limit: 512m
+    restart: unless-stopped
+
+volumes:
+  taximetro-h2:
+    name: taximetro-h2-data

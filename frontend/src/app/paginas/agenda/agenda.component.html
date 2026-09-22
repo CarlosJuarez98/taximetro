@@ -1,0 +1,148 @@
+<section class="agenda">
+  <div class="cabeza">
+    <h1>Agenda</h1>
+    <button type="button" class="btn btn-acento mini" (click)="nueva()">+ Reservar</button>
+  </div>
+
+  @if (error) { <p class="error">{{ error }}</p> }
+  @if (ok) { <p class="ok">{{ ok }}</p> }
+
+  @if (mostrarForm) {
+    <form class="card form" (ngSubmit)="guardar()">
+      <p class="label">Nueva reserva (agenda)</p>
+
+      <label>Fecha y hora
+        <input type="datetime-local" [(ngModel)]="form.cuandoLocal" (ngModelChange)="onCuandoChange()" name="cuando" required />
+      </label>
+
+      @if (conflicto) {
+        <p class="aviso-conflicto">Ya tienes otro viaje a esa hora.</p>
+        @if (propuestasForm.length) {
+          <div class="propuestas">
+            <p class="muted">Horarios libres:</p>
+            @for (p of propuestasForm; track p) {
+              <button type="button" class="btn btn-seco mini" (click)="usarPropuestaForm(p)">
+                {{ cuandoTxtIso(p) }}
+              </button>
+            }
+          </div>
+        }
+      }
+
+      <label>Cliente
+        <input [(ngModel)]="form.cliente" name="cliente" placeholder="Nombre" required autocomplete="name" />
+      </label>
+
+      <label>Teléfono / WhatsApp
+        <input [(ngModel)]="form.telefono" name="telefono" placeholder="opcional" inputmode="tel" autocomplete="tel" />
+      </label>
+
+      <label>Destino / ruta
+        <input [(ngModel)]="form.destinoTexto" name="destino" placeholder="ej. Apizaco, mercado…" />
+      </label>
+
+      <div class="dos">
+        <label>Km est.
+          <input type="number" step="0.1" min="0" [(ngModel)]="form.kmEstimado" name="km" />
+        </label>
+        <label>Cobro est. $
+          <input type="number" step="1" min="0" [(ngModel)]="form.cobroEstimado" name="cobro" />
+        </label>
+      </div>
+
+      <div class="dos">
+        <label>Casetas $
+          <input type="number" step="1" min="0" [(ngModel)]="form.casetas" name="casetas" />
+        </label>
+        <label>Ocupado (min)
+          <input type="number" step="15" min="30" [(ngModel)]="form.minutosOcupados" (ngModelChange)="onCuandoChange()" name="mins" />
+        </label>
+      </div>
+
+      <label class="check">
+        <input type="checkbox" [(ngModel)]="form.nocturno" name="noche" />
+        Tarifa nocturna
+      </label>
+
+      <label>Notas
+        <input [(ngModel)]="form.notas" name="notas" placeholder="opcional" />
+      </label>
+
+      <div class="acciones-form">
+        <button type="submit" class="btn btn-acento" [disabled]="guardando || conflicto">Guardar en agenda</button>
+        <button type="button" class="btn btn-seco" (click)="cancelarForm()">Cerrar</button>
+      </div>
+    </form>
+  }
+
+  <h2>Pendientes</h2>
+  @if (!pendientes.length) {
+    <p class="muted">Sin cotizaciones pendientes. En Viaje elige Día/Noche y toca Reservar.</p>
+  }
+  <ul class="lista">
+    @for (r of pendientes; track r.id) {
+      <li class="card fila pendiente" [class.conflicto]="r.conflicto">
+        <div class="izq">
+          <span class="badge-pend">Pendiente</span>
+          <strong>{{ cuandoTxt(r) }}</strong>
+          <p>{{ r.cliente }}@if (r.telefono) { · {{ r.telefono }} }</p>
+          @if (r.destinoTexto) {
+            <p class="muted">{{ r.destinoTexto }}</p>
+          }
+          <p class="muted">
+            @if ((r.kmEstimado || 0) > 0) { {{ r.kmEstimado }} km · }
+            {{ cobroTxt(r) }}
+            @if (r.nocturno) { · noche }
+            @if (r.conflicto) { · hora ocupada }
+          </p>
+          @if (r.conflicto && ((r.id && propuestasPorId[r.id]) || r.propuestas)?.length) {
+            <div class="propuestas">
+              <p class="aviso-conflicto">Ocupado. Propón al cliente:</p>
+              @for (p of (r.id && propuestasPorId[r.id]) || r.propuestas || []; track p) {
+                <button type="button" class="btn btn-seco mini" (click)="confirmar(r, p)">
+                  Confirmar {{ cuandoTxtIso(p) }}
+                </button>
+              }
+              <button type="button" class="btn btn-seco mini" (click)="copiarPropuesta(r)">Copiar mensaje</button>
+            </div>
+          }
+        </div>
+        <div class="der">
+          @if (!r.conflicto) {
+            <button type="button" class="btn btn-acento mini" (click)="confirmar(r)">Confirmar</button>
+          }
+          <button type="button" class="btn btn-peligro mini" (click)="cancelarReserva(r)">Descartar</button>
+        </div>
+      </li>
+    }
+  </ul>
+
+  <h2>Agenda</h2>
+  @if (!reservas.length) {
+    <p class="muted">Sin viajes confirmados.</p>
+  }
+
+  <ul class="lista">
+    @for (r of reservas; track r.id) {
+      <li class="card fila" [class.conflicto]="r.conflicto">
+        <div class="izq">
+          <strong>{{ cuandoTxt(r) }}</strong>
+          <p>{{ r.cliente }}@if (r.telefono) { · {{ r.telefono }} }</p>
+          @if (r.destinoTexto) {
+            <p class="muted">{{ r.destinoTexto }}</p>
+          }
+          <p class="muted">
+            @if ((r.kmEstimado || 0) > 0) { {{ r.kmEstimado }} km · }
+            {{ cobroTxt(r) }}
+            @if (r.nocturno) { · noche }
+            @if (r.conflicto) { · empalme }
+          </p>
+        </div>
+        <div class="der">
+          <button type="button" class="btn btn-ok mini" (click)="marcarHecha(r)">Hecha</button>
+          <button type="button" class="btn btn-peligro mini" (click)="cancelarReserva(r)">Cancelar</button>
+        </div>
+      </li>
+    }
+  </ul>
+</section>

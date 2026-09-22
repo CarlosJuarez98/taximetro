@@ -1,0 +1,17 @@
+**/node_modules/
+**/dist/
+**/target/
+**/.angular/
+**/data/
+*.class
+*.log
+.idea/
+*.iml
+.vscode/
+.DS_Store
+.env.cloud
+wallet/
+wallet-local/
+*.tar.gz
+*.tgz
+_deploy/
