@@ -76,6 +76,8 @@ export interface Reserva {
   conflicto?: boolean;
   /** ISO de horarios libres si hay empalme. */
   propuestas?: string[];
+  /** Solo al crear: días seguidos misma hora (ej. 7 = semana). */
+  repetirDias?: number;
 }
 
 export interface PuntoGps {

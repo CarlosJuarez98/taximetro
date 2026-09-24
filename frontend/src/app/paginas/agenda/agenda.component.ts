@@ -3,13 +3,15 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../api.service';
 import { FechaHoraPickerComponent } from '../../fecha-hora-picker/fecha-hora-picker.component';
+import { SugerenciaCampoComponent } from '../../sugerencia-campo.component';
+import { RecordatorioService } from '../../recordatorio.service';
 import { RESERVA_BORRADOR_KEY, Reserva, ReservaBorrador } from '../../modelos';
 import { dinero } from '../../cobro.util';
 
 @Component({
   selector: 'app-agenda',
   standalone: true,
-  imports: [FormsModule, FechaHoraPickerComponent],
+  imports: [FormsModule, FechaHoraPickerComponent, SugerenciaCampoComponent],
   templateUrl: './agenda.component.html',
   styleUrl: './agenda.component.css',
 })
@@ -17,9 +19,12 @@ export class AgendaComponent implements OnInit {
   private readonly api = inject(ApiService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
+  readonly avisos = inject(RecordatorioService);
 
   reservas: Reserva[] = [];
   pendientes: Reserva[] = [];
+  clientesHist: string[] = [];
+  destinosHist: string[] = [];
   error = '';
   ok = '';
   guardando = false;
@@ -40,10 +45,13 @@ export class AgendaComponent implements OnInit {
     nocturno: false,
     minutosOcupados: 60,
     notas: '',
+    /** 1 = solo ese día; 7 = diario una semana. */
+    repetirDias: 1,
   };
 
   ngOnInit(): void {
     this.cargar();
+    this.cargarHistorial();
     this.route.queryParamMap.subscribe((q) => {
       if (q.get('nueva') === '1') {
         this.cargarBorrador();
@@ -74,6 +82,17 @@ export class AgendaComponent implements OnInit {
     });
   }
 
+  cargarHistorial(): void {
+    this.api.historialClientes().subscribe({
+      next: (l) => (this.clientesHist = l || []),
+      error: () => {},
+    });
+    this.api.historialDestinos().subscribe({
+      next: (l) => (this.destinosHist = l || []),
+      error: () => {},
+    });
+  }
+
   nueva(): void {
     this.limpiarForm();
     if (!this.form.cuandoLocal) {
@@ -96,6 +115,22 @@ export class AgendaComponent implements OnInit {
     this.checarConflicto();
   }
 
+  setRepetir(dias: number): void {
+    this.form.repetirDias = dias;
+  }
+
+  async activarAvisos(): Promise<void> {
+    const ok = await this.avisos.pedirPermiso();
+    this.ok = ok
+      ? `Avisos activos: ${this.avisos.minutosAntes} min antes del viaje.`
+      : 'No se pudo activar. En el celular, instala la app (Agregar a inicio) y permite notificaciones.';
+  }
+
+  setAvisoMins(mins: number): void {
+    this.avisos.minutosAntes = mins;
+    this.ok = `Te avisaré ${mins} min antes.`;
+  }
+
   guardar(): void {
     if (this.guardando) return;
     if (!this.form.cuandoLocal) {
@@ -110,6 +145,7 @@ export class AgendaComponent implements OnInit {
     this.error = '';
     this.ok = '';
     const cuando = new Date(this.form.cuandoLocal).toISOString();
+    const dias = Math.max(1, Math.min(31, this.form.repetirDias || 1));
     const dto: Reserva = {
       cuando,
       cliente: this.form.cliente.trim(),
@@ -122,11 +158,12 @@ export class AgendaComponent implements OnInit {
       minutosOcupados: this.form.minutosOcupados || 60,
       notas: this.form.notas.trim() || null,
       estado: 'RESERVADA',
+      repetirDias: dias,
     };
     this.api.crearReserva(dto).subscribe({
       next: (r) => {
         this.guardando = false;
-        if (r.conflicto && r.propuestas?.length) {
+        if (dias === 1 && r.conflicto && r.propuestas?.length) {
           this.conflicto = true;
           this.propuestasForm = r.propuestas;
           this.error = 'Esa hora está ocupada. Elige otra abajo o cámbiala.';
@@ -135,8 +172,12 @@ export class AgendaComponent implements OnInit {
         this.mostrarForm = false;
         this.limpiarForm();
         sessionStorage.removeItem(RESERVA_BORRADOR_KEY);
-        this.ok = 'Viaje en agenda.';
+        this.ok =
+          dias > 1
+            ? `Serie de ${dias} días creada. Revisa agenda y pendientes si hubo empalmes.`
+            : 'Viaje en agenda.';
         this.cargar();
+        this.cargarHistorial();
         void this.router.navigate(['/agenda']);
       },
       error: (e) => {
@@ -228,7 +269,7 @@ export class AgendaComponent implements OnInit {
   }
 
   private checarConflicto(): void {
-    if (!this.form.cuandoLocal) {
+    if (!this.form.cuandoLocal || this.form.repetirDias > 1) {
       this.conflicto = false;
       this.propuestasForm = [];
       return;
@@ -281,6 +322,7 @@ export class AgendaComponent implements OnInit {
       nocturno: false,
       minutosOcupados: 60,
       notas: '',
+      repetirDias: 1,
     };
     this.propuestasForm = [];
   }
@@ -295,7 +337,6 @@ export class AgendaComponent implements OnInit {
   private toLocalInput(iso: string): string {
     const d = new Date(iso);
     const pad = (n: number) => n.toString().padStart(2, '0');
-    // datetime-local en hora local del dispositivo
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 }

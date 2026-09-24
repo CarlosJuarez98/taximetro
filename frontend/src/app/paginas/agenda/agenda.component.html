@@ -7,6 +7,20 @@
   @if (error) { <p class="error">{{ error }}</p> }
   @if (ok) { <p class="ok">{{ ok }}</p> }
 
+  <div class="card avisos">
+    <p class="label">Recordatorios</p>
+    <p class="muted mini">Te avisa {{ avisos.minutosAntes }} min antes (mejor con la app instalada en el celular).</p>
+    <div class="aviso-row">
+      <button type="button" class="modo" [class.activo]="avisos.minutosAntes === 5" (click)="setAvisoMins(5)">5 min</button>
+      <button type="button" class="modo" [class.activo]="avisos.minutosAntes === 10" (click)="setAvisoMins(10)">10 min</button>
+      @if (!avisos.activo) {
+        <button type="button" class="btn btn-seco mini" (click)="activarAvisos()">Activar avisos</button>
+      } @else {
+        <span class="chip-ok">Avisos on</span>
+      }
+    </div>
+  </div>
+
   @if (mostrarForm) {
     <form class="card form" (ngSubmit)="guardar()">
       <p class="label">Nueva reserva (agenda)</p>
@@ -21,7 +35,19 @@
         />
       </div>
 
-      @if (conflicto) {
+      <div class="serie">
+        <p class="label">Repetir</p>
+        <div class="pct" role="group" aria-label="Repetir días">
+          <button type="button" class="modo" [class.activo]="form.repetirDias === 1" (click)="setRepetir(1)">1 día</button>
+          <button type="button" class="modo" [class.activo]="form.repetirDias === 5" (click)="setRepetir(5)">5 días</button>
+          <button type="button" class="modo" [class.activo]="form.repetirDias === 7" (click)="setRepetir(7)">7 días</button>
+        </div>
+        @if (form.repetirDias > 1) {
+          <p class="muted mini">Misma hora, {{ form.repetirDias }} días seguidos. Si algún día choca, queda en pendientes.</p>
+        }
+      </div>
+
+      @if (conflicto && form.repetirDias === 1) {
         <p class="aviso-conflicto">Ya tienes otro viaje a esa hora.</p>
         @if (propuestasForm.length) {
           <div class="propuestas">
@@ -36,15 +62,26 @@
       }
 
       <label>Cliente
-        <input [(ngModel)]="form.cliente" name="cliente" placeholder="Nombre" required autocomplete="name" />
+        <app-sugerencia-campo
+          name="cliente"
+          [(ngModel)]="form.cliente"
+          [sugerencias]="clientesHist"
+          placeholder="Nombre"
+          autocomplete="name"
+        />
       </label>
 
       <label>Teléfono / WhatsApp
         <input [(ngModel)]="form.telefono" name="telefono" placeholder="opcional" inputmode="tel" autocomplete="tel" />
       </label>
 
-      <label>Destino / ruta
-        <input [(ngModel)]="form.destinoTexto" name="destino" placeholder="ej. Apizaco, mercado…" />
+      <label>Destino
+        <app-sugerencia-campo
+          name="destino"
+          [(ngModel)]="form.destinoTexto"
+          [sugerencias]="destinosHist"
+          placeholder="ej. Apizaco, mercado…"
+        />
       </label>
 
       <div class="dos">
@@ -75,7 +112,9 @@
       </label>
 
       <div class="acciones-form">
-        <button type="submit" class="btn btn-acento" [disabled]="guardando || conflicto">Guardar en agenda</button>
+        <button type="submit" class="btn btn-acento" [disabled]="guardando || (conflicto && form.repetirDias === 1)">
+          {{ form.repetirDias > 1 ? 'Guardar ' + form.repetirDias + ' días' : 'Guardar en agenda' }}
+        </button>
         <button type="button" class="btn btn-seco" (click)="cancelarForm()">Cerrar</button>
       </div>
     </form>

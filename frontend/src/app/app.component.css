@@ -184,6 +184,77 @@ main.fit {
   padding: 0 0.1rem;
 }
 
+/* Barra + toast de carga al cambiar pantalla / acciones */
+.load-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  z-index: 80;
+  background: color-mix(in srgb, var(--rojo) 25%, transparent);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.load-fill {
+  display: block;
+  height: 100%;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, var(--rojo), #ff7a85, transparent);
+  animation: loadSlide 0.85s ease-in-out infinite;
+}
+
+.load-toast {
+  position: fixed;
+  top: calc(0.55rem + var(--safe-top));
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 81;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--rojo) 45%, var(--linea));
+  background: color-mix(in srgb, #120e12 92%, var(--rojo));
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45);
+  pointer-events: none;
+  animation: toastIn 0.18s var(--ease-out) both;
+}
+
+.load-spin {
+  width: 0.85rem;
+  height: 0.85rem;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, #fff 25%, transparent);
+  border-top-color: #fff;
+  animation: spin 0.7s linear infinite;
+}
+
+.shell.busy main {
+  opacity: 0.72;
+  transition: opacity 0.15s ease;
+}
+
+@keyframes loadSlide {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translate(-50%, -6px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
 @media (min-width: 900px) {
   .logo-ring {
     width: 40px;
@@ -230,6 +301,30 @@ main.fit {
   }
 
   .dock-ico { font-size: 0.92rem; }
+}
+
+/* Móvil: no forzar fit a viewport — scroll natural para Día/Noche */
+@media (max-width: 700px) {
+  .shell.fit-viaje {
+    height: auto;
+    max-height: none;
+    min-height: 100dvh;
+    min-height: 100svh;
+    overflow: visible;
+  }
+
+  .shell.fit-viaje main.fit {
+    overflow: visible;
+    overflow-y: visible;
+    display: block;
+    padding-bottom: calc(0.85rem + var(--dock-h) + var(--safe-bottom));
+  }
+
+  .shell.fit-viaje main.fit > * {
+    flex: none;
+    min-height: 0;
+    height: auto;
+  }
 }
 
 @keyframes logoPulse {

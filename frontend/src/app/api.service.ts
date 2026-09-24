@@ -134,4 +134,12 @@ export class ApiService {
       params: new HttpParams().set('cuando', cuandoIso).set('minutos', minutos),
     });
   }
+
+  historialClientes(): Observable<string[]> {
+    return this.http.get<string[]>('/api/reservas/historial/clientes');
+  }
+
+  historialDestinos(): Observable<string[]> {
+    return this.http.get<string[]>('/api/reservas/historial/destinos');
+  }
 }

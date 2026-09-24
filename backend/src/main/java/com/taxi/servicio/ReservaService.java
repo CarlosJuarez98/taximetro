@@ -4,8 +4,12 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -52,6 +56,38 @@ public class ReservaService {
         return repo.findTop40ByUsuarioIdOrderByCuandoDesc(auth.actualId()).stream()
                 .map(ReservaDto::de)
                 .toList();
+    }
+
+    /** Clientes ya usados (más recientes primero). */
+    public List<String> historialClientes() {
+        Set<String> vistos = new LinkedHashSet<>();
+        List<String> out = new ArrayList<>();
+        for (Reserva r : repo.findTop40ByUsuarioIdOrderByCuandoDesc(auth.actualId())) {
+            String c = r.getCliente() == null ? "" : r.getCliente().trim();
+            if (c.isEmpty()) continue;
+            String key = c.toLowerCase(Locale.ROOT);
+            if (vistos.add(key)) {
+                out.add(c);
+            }
+            if (out.size() >= 25) break;
+        }
+        return out;
+    }
+
+    /** Destinos ya usados (más recientes primero). */
+    public List<String> historialDestinos() {
+        Set<String> vistos = new LinkedHashSet<>();
+        List<String> out = new ArrayList<>();
+        for (Reserva r : repo.findTop40ByUsuarioIdOrderByCuandoDesc(auth.actualId())) {
+            String d = r.getDestinoTexto() == null ? "" : r.getDestinoTexto().trim();
+            if (d.isEmpty()) continue;
+            String key = d.toLowerCase(Locale.ROOT);
+            if (vistos.add(key)) {
+                out.add(d);
+            }
+            if (out.size() >= 25) break;
+        }
+        return out;
     }
 
     public List<ReservaDto> entre(Instant desde, Instant hasta) {
@@ -116,6 +152,48 @@ public class ReservaService {
 
     @Transactional
     public ReservaDto crear(ReservaDto dto) {
+        int dias = dto.repetirDias == null ? 1 : Math.max(1, Math.min(31, dto.repetirDias));
+        if (dias > 1) {
+            return crearSerie(dto, dias);
+        }
+        return crearUno(dto, false);
+    }
+
+    /**
+     * Crea N reservas (misma hora, días seguidos). Si alguna choca, se guarda como pendiente.
+     */
+    @Transactional
+    public ReservaDto crearSerie(ReservaDto dto, int dias) {
+        validar(dto);
+        ReservaDto primera = null;
+        int enAgenda = 0;
+        int pendientes = 0;
+        for (int i = 0; i < dias; i++) {
+            ReservaDto dia = copiarParaDia(dto, i);
+            ReservaDto r = crearUno(dia, true);
+            if (primera == null) {
+                primera = r;
+            }
+            if (r.estado == Reserva.Estado.PENDIENTE || r.conflicto) {
+                pendientes++;
+            } else {
+                enAgenda++;
+            }
+        }
+        if (primera != null) {
+            primera.repetirDias = dias;
+            String nota = primera.notas == null ? "" : primera.notas;
+            String extra = "Serie " + dias + " días · " + enAgenda + " en agenda"
+                    + (pendientes > 0 ? (" · " + pendientes + " pendiente(s)") : "");
+            primera.notas = nota.isBlank() ? extra : (nota + " · " + extra);
+        }
+        return primera;
+    }
+
+    /**
+     * @param guardarSiConflicto si true y choca la hora, guarda como PENDIENTE; si false, solo reporta.
+     */
+    private ReservaDto crearUno(ReservaDto dto, boolean guardarSiConflicto) {
         validar(dto);
         Reserva.Estado estado = dto.estado == Reserva.Estado.RESERVADA
                 ? Reserva.Estado.RESERVADA
@@ -123,14 +201,26 @@ public class ReservaService {
         int mins = dto.minutosOcupados > 0 ? dto.minutosOcupados : estimarMinutos(dto.kmEstimado);
 
         if (estado == Reserva.Estado.RESERVADA && hayConflicto(dto.cuando, mins, null)) {
-            ReservaDto out = new ReservaDto();
-            out.cuando = dto.cuando;
-            out.cliente = dto.cliente;
-            out.estado = Reserva.Estado.PENDIENTE;
-            out.conflicto = true;
-            out.propuestas = proponerHorarios(dto.cuando, mins, null);
-            out.minutosOcupados = mins;
-            return out;
+            if (!guardarSiConflicto) {
+                ReservaDto out = new ReservaDto();
+                out.cuando = dto.cuando;
+                out.cliente = dto.cliente;
+                out.destinoTexto = dto.destinoTexto;
+                out.estado = Reserva.Estado.PENDIENTE;
+                out.conflicto = true;
+                out.propuestas = proponerHorarios(dto.cuando, mins, null);
+                out.minutosOcupados = mins;
+                return out;
+            }
+            Reserva r = new Reserva();
+            aplicar(r, dto);
+            r.setUsuarioId(auth.actualId());
+            r.setEstado(Reserva.Estado.PENDIENTE);
+            r.setCreadaEn(Instant.now());
+            ReservaDto saved = enriquecer(repo.save(r));
+            saved.conflicto = true;
+            saved.propuestas = proponerHorarios(dto.cuando, mins, null);
+            return saved;
         }
 
         Reserva r = new Reserva();
@@ -139,6 +229,22 @@ public class ReservaService {
         r.setEstado(estado);
         r.setCreadaEn(Instant.now());
         return enriquecer(repo.save(r));
+    }
+
+    private static ReservaDto copiarParaDia(ReservaDto dto, int diaOffset) {
+        ReservaDto c = new ReservaDto();
+        c.cuando = dto.cuando.plus(diaOffset, ChronoUnit.DAYS);
+        c.cliente = dto.cliente;
+        c.telefono = dto.telefono;
+        c.destinoTexto = dto.destinoTexto;
+        c.kmEstimado = dto.kmEstimado;
+        c.cobroEstimado = dto.cobroEstimado;
+        c.casetas = dto.casetas;
+        c.nocturno = dto.nocturno;
+        c.minutosOcupados = dto.minutosOcupados;
+        c.notas = dto.notas;
+        c.estado = dto.estado;
+        return c;
     }
 
     @Transactional

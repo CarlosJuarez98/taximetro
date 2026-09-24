@@ -1,7 +1,7 @@
 @if (esLogin) {
   <router-outlet />
 } @else {
-  <div class="shell" [class.fit-viaje]="esViaje">
+  <div class="shell" [class.fit-viaje]="esViaje" [class.busy]="(feedback.cargando$ | async) || navBusy">
     <header class="top">
       <div class="brand">
         <div class="logo-ring">
@@ -16,12 +16,23 @@
         <button type="button" class="btn-salir" (click)="salir()">Salir</button>
       }
     </header>
+
+    @if ((feedback.cargando$ | async) || navBusy) {
+      <div class="load-bar" aria-live="polite" aria-busy="true">
+        <span class="load-fill"></span>
+      </div>
+      <div class="load-toast">
+        <span class="load-spin" aria-hidden="true"></span>
+        <span>{{ feedback.texto }}</span>
+      </div>
+    }
+
     <main [class.fit]="esViaje">
       <router-outlet />
     </main>
     <nav class="nav-dock" aria-label="Secciones">
       @for (l of dockLinks; track l.path) {
-        <a [routerLink]="l.path" routerLinkActive="activo">
+        <a [routerLink]="l.path" routerLinkActive="activo" (click)="onDockClick()">
           <span class="dock-ico" aria-hidden="true">{{ l.icon }}</span>
           <span class="dock-lbl">{{ l.label }}</span>
         </a>

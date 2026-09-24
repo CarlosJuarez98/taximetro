@@ -25,6 +25,11 @@ public class ReservaDto {
     public boolean conflicto;
     /** Horarios libres para ofrecer al cliente si hay empalme. */
     public List<Instant> propuestas;
+    /**
+     * Solo al crear: cuántos días seguidos (misma hora). 1 = un solo viaje.
+     * Ej. 7 = diario toda la semana.
+     */
+    public Integer repetirDias;
 
     public static ReservaDto de(Reserva r) {
         ReservaDto dto = new ReservaDto();

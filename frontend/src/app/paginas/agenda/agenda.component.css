@@ -49,6 +49,56 @@ h2 {
   font-size: 0.88rem;
 }
 
+.avisos {
+  display: grid;
+  gap: 0.3rem;
+}
+
+.aviso-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.serie {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.pct {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.modo {
+  border: 1px solid var(--linea);
+  background: var(--superficie-2);
+  color: var(--texto);
+  border-radius: 0.45rem;
+  min-height: 2rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.modo.activo {
+  background: linear-gradient(135deg, #ff5a67, var(--rojo));
+  border-color: transparent;
+  color: #fff;
+}
+
+.chip-ok {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #9be7c8;
+}
+
+.muted.mini {
+  margin: 0;
+  font-size: 0.72rem;
+}
+
 .check input {
   width: auto;
   min-height: auto;

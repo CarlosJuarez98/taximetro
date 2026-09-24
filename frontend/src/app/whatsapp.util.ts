@@ -224,33 +224,73 @@ function textoCorto(data: TarjetaWhatsapp): string {
   return lineas.join('\n');
 }
 
+async function copiarTextoSeguro(texto: string): Promise<void> {
+  const t = (texto || '').trim();
+  if (!t) return;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(t);
+      return;
+    }
+  } catch {
+    /* fallback */
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = t;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  } catch {
+    /* ignore */
+  }
+}
+
+export type ResultadoShareWa = {
+  modo: 'compartido' | 'descargado';
+  /** En Android: pegar el texto en «Añadir mensaje» (ya está copiado). */
+  pegarCaption: boolean;
+};
+
 /**
- * Intenta compartir imagen + texto (móvil).
- * Si no se puede, abre WhatsApp con texto corto y descarga la tarjeta.
+ * Comparte la tarjeta (imagen).
+ * - iOS: foto + texto en caption.
+ * - Android: solo foto (si mandamos text, WA lo pone en otra burbuja);
+ *   el texto queda en portapapeles para pegar en «Añadir mensaje».
  */
-export async function compartirWhatsappTarjeta(data: TarjetaWhatsapp): Promise<void> {
+export async function compartirWhatsappTarjeta(data: TarjetaWhatsapp): Promise<ResultadoShareWa> {
   const payload = { ...data, slogan: data.slogan || sloganAleatorio() };
   const texto = textoCorto(payload);
   const blob = await crearTarjetaWhatsapp(payload);
-  const file = new File([blob], data.tipo === 'estimado' ? 'estimado-viaja-en-el-rojo.png' : 'recibo-viaja-en-el-rojo.png', {
-    type: 'image/png',
-  });
+  const file = new File(
+    [blob],
+    data.tipo === 'estimado' ? 'estimado-viaja-en-el-rojo.png' : 'recibo-viaja-en-el-rojo.png',
+    { type: 'image/png' }
+  );
 
+  await copiarTextoSeguro(texto);
+
+  const esAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent || '');
   const nav = navigator as Navigator & {
     share?: (data: ShareData) => Promise<void>;
     canShare?: (data: ShareData) => boolean;
   };
 
-  if (nav.share && nav.canShare?.({ files: [file] })) {
+  if (typeof nav.share === 'function' && (!nav.canShare || nav.canShare({ files: [file] }))) {
     try {
-      await nav.share({
-        files: [file],
-        title: 'Viaja en el Rojo',
-        text: texto,
-      });
-      return;
+      const shareData: ShareData = esAndroid
+        ? { files: [file], title: 'Viaja en el Rojo' }
+        : { files: [file], title: 'Viaja en el Rojo', text: texto };
+      await nav.share(shareData);
+      return { modo: 'compartido', pegarCaption: esAndroid };
     } catch (e) {
-      if ((e as Error)?.name === 'AbortError') return;
+      if ((e as Error)?.name === 'AbortError') {
+        return { modo: 'compartido', pegarCaption: esAndroid };
+      }
     }
   }
 
@@ -260,5 +300,5 @@ export async function compartirWhatsappTarjeta(data: TarjetaWhatsapp): Promise<v
   a.download = file.name;
   a.click();
   URL.revokeObjectURL(url);
-  window.open('https://wa.me/?text=' + encodeURIComponent(texto + '\n(Adjunta la tarjeta que se descargó)'), '_blank');
+  return { modo: 'descargado', pegarCaption: true };
 }

@@ -1,25 +1,16 @@
 :host {
   display: block;
-}
-
-:host-context(.cuando-viaje) {
-  display: block;
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow: visible;
+  width: 100%;
+  min-width: 0;
 }
 
 .fhp {
   display: grid;
-  gap: 0.35rem;
-  padding: 0.4rem;
-  max-width: 100%;
-  border-radius: var(--r);
-  border: 1px solid color-mix(in srgb, var(--rojo) 35%, var(--linea));
-  background:
-    radial-gradient(120% 80% at 100% 0%, rgba(255, 30, 50, 0.2), transparent 55%),
-    linear-gradient(165deg, #161018, #0e0c10 70%);
-  animation: fhpIn 0.3s var(--ease-out) both;
+  gap: 0.3rem;
+}
+
+.fhp.compact {
+  gap: 0.28rem;
 }
 
 .fhp.disabled {
@@ -27,230 +18,83 @@
   pointer-events: none;
 }
 
-.hero {
-  display: flex;
+.fecha-trigger {
+  width: 100%;
+  min-height: 2.25rem;
+  display: inline-flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.35rem;
-  padding: 0.28rem 0.4rem;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--rojo) 35%, var(--linea));
   border-radius: 0.5rem;
-  background: color-mix(in srgb, #000 35%, transparent);
-  border: 1px solid color-mix(in srgb, var(--rojo) 25%, transparent);
-}
-
-.hero.pop {
-  animation: heroPop 0.28s var(--ease-out);
-}
-
-.hero-date {
-  display: flex;
-  align-items: baseline;
-  gap: 0.28rem;
-  min-width: 0;
-}
-
-.semana {
-  font-size: 0.58rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--texto-suave);
-}
-
-.dia {
-  font-family: Oswald, sans-serif;
-  font-size: 1.35rem;
-  font-weight: 700;
-  line-height: 1;
-  color: #fff;
-  text-shadow: 0 0 14px rgba(255, 30, 50, 0.5);
-}
-
-.mes {
-  font-size: 0.68rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  color: var(--rojo-2);
-}
-
-.hero-time {
-  position: relative;
-  display: grid;
-  place-items: center;
-  min-width: 3.6rem;
-  padding: 0.22rem 0.35rem;
-}
-
-.reloj-ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 999px;
-  border: 1.5px solid color-mix(in srgb, var(--rojo) 55%, transparent);
-  animation: ringSpin 8s linear infinite;
-  pointer-events: none;
-}
-
-.reloj-ring::before {
-  content: '';
-  position: absolute;
-  top: -2px;
-  left: 50%;
-  width: 4px;
-  height: 4px;
-  margin-left: -2px;
-  border-radius: 50%;
-  background: var(--rojo);
-}
-
-.hora {
-  position: relative;
-  z-index: 1;
-  font-family: Oswald, sans-serif;
-  font-size: 1.05rem;
-  font-weight: 700;
-  color: #fff;
-  font-variant-numeric: tabular-nums;
-}
-
-.rapidos {
-  display: flex;
-  gap: 0.2rem;
-}
-
-.chip {
-  flex: 1 1 0;
-  border: 1px solid var(--linea);
   background: var(--superficie-2);
-  color: var(--texto-suave);
-  border-radius: 999px;
-  padding: 0.22rem 0.35rem;
-  font-size: 0.58rem;
-  font-weight: 800;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
-  min-height: 1.55rem;
-}
-
-.chip:active {
-  transform: scale(0.96);
-}
-
-.cal-week {
-  display: grid;
-  gap: 0.2rem;
-  padding: 0.3rem;
-  border-radius: 0.5rem;
-  background: color-mix(in srgb, #000 28%, transparent);
-  border: 1px solid color-mix(in srgb, var(--linea) 80%, transparent);
-}
-
-.cal-nav {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.25rem;
-}
-
-.nav-btn {
-  width: 1.55rem;
-  height: 1.55rem;
-  border-radius: 0.35rem;
-  border: 1px solid var(--linea);
-  background: var(--superficie-2);
-  color: #fff;
-  font-size: 0.95rem;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.cal-titulo {
-  font-family: Oswald, sans-serif;
-  font-size: 0.72rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #fff;
-  text-align: center;
-}
-
-.cal-titulo-in {
-  display: inline-block;
-  animation: tituloIn 0.25s var(--ease-out);
-}
-
-.weekdays {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0.12rem;
-  text-align: center;
-  font-size: 0.5rem;
-  font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--texto-suave);
-}
-
-.week-row {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 0.15rem;
-  animation: gridIn 0.22s var(--ease-out);
-}
-
-.week-row.slide-izq {
-  animation-name: gridIzq;
-}
-
-.week-row.slide-der {
-  animation-name: gridDer;
-}
-
-.day {
-  height: 2.15rem;
-  border: 0;
-  border-radius: 0.4rem;
-  background: color-mix(in srgb, var(--superficie-2) 70%, transparent);
   color: var(--texto);
-  font-weight: 800;
-  font-size: 0.82rem;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: left;
+}
+
+.fecha-trigger:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--rojo) 60%, var(--linea));
+  background: color-mix(in srgb, var(--rojo) 12%, var(--superficie-2));
+}
+
+.fhp.abierto .fecha-trigger {
+  border-color: color-mix(in srgb, var(--rojo) 70%, var(--linea));
+  box-shadow: 0 0 0 2px rgba(255, 30, 50, 0.18);
+}
+
+.fecha-texto {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.84rem;
+  text-transform: capitalize;
+}
+
+.fecha-hora-badge {
+  flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
-  padding: 0;
-  transition: transform 0.12s var(--ease-out), background 0.15s, color 0.15s, box-shadow 0.2s;
-}
-
-.day:not(.pasado):not(.sel):hover {
-  background: color-mix(in srgb, var(--rojo) 22%, transparent);
+  font-size: 0.78rem;
+  font-weight: 800;
   color: #fff;
+  background: color-mix(in srgb, var(--rojo) 75%, #000);
+  padding: 0.12rem 0.35rem;
+  border-radius: 0.3rem;
 }
 
-.day.hoy:not(.sel) {
-  color: var(--rojo-2);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--rojo) 55%, transparent);
-}
-
-.day.sel {
-  background: linear-gradient(145deg, #ff5a67, var(--rojo));
-  color: #fff;
-  box-shadow: 0 3px 10px var(--rojo-glow);
-  animation: daySel 0.28s var(--ease-out);
-}
-
-.day.pasado {
-  opacity: 0.28;
+.fecha-ico {
+  flex: 0 0 auto;
+  color: var(--texto-suave);
+  font-size: 0.8rem;
 }
 
 .time {
   display: grid;
-  gap: 0.28rem;
+  gap: 0.15rem;
 }
 
-.time-block {
+.time-row {
   display: grid;
-  gap: 0.12rem;
+  grid-template-columns: 1fr;
+  gap: 0.3rem;
+}
+
+.fhp.compact .time-row {
+  gap: 0.25rem;
+}
+
+.time-block.grow {
+  min-width: 0;
 }
 
 .time-label {
-  margin: 0;
-  font-size: 0.52rem;
+  margin: 0 0 0.12rem;
+  font-size: 0.55rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -258,45 +102,37 @@
 }
 
 .time-label.hint {
+  margin-bottom: 0;
   color: var(--rojo-2);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
+  text-transform: none;
+  font-size: 0.65rem;
+  font-weight: 700;
 }
 
 .horas {
   display: flex;
   gap: 0.18rem;
   overflow-x: auto;
-  scroll-snap-type: x mandatory;
-  padding: 0.05rem 0 0.2rem;
+  overflow-y: hidden;
+  padding-bottom: 0.05rem;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
-  scrollbar-color: color-mix(in srgb, var(--rojo) 50%, transparent) transparent;
-  touch-action: pan-x;
-}
-
-.horas::-webkit-scrollbar {
-  height: 2px;
-}
-
-.horas::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--rojo) 55%, transparent);
-  border-radius: 999px;
 }
 
 .h-btn,
 .m-btn {
   flex: 0 0 auto;
-  scroll-snap-align: center;
+  min-width: 2rem;
+  min-height: 1.9rem;
+  padding: 0.15rem 0.3rem;
+  border-radius: 0.35rem;
   border: 1px solid var(--linea);
   background: var(--superficie-2);
-  color: var(--texto-suave);
-  border-radius: 0.4rem;
-  min-width: 2.15rem;
-  min-height: 1.85rem;
-  font-family: Oswald, sans-serif;
-  font-size: 0.82rem;
+  color: var(--texto);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
 }
 
 .h-btn.activo,
@@ -304,74 +140,74 @@
   background: linear-gradient(135deg, #ff5a67, var(--rojo));
   border-color: transparent;
   color: #fff;
-  box-shadow: 0 3px 10px var(--rojo-glow);
-  animation: timeTick 0.25s var(--ease-out);
+  box-shadow: 0 3px 10px rgba(255, 30, 50, 0.3);
 }
 
 .mins {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0.18rem;
 }
 
 .m-btn {
-  width: 100%;
   min-width: 0;
+  width: 100%;
 }
 
-.compact {
-  gap: 0.28rem;
-  padding: 0.35rem;
+.mins-block .time-label {
+  margin-bottom: 0.1rem;
 }
 
-@keyframes fhpIn {
-  from { opacity: 0; transform: translateY(5px); }
-  to { opacity: 1; transform: translateY(0); }
+.time-selects {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
 }
 
-@keyframes heroPop {
-  0% { transform: scale(1); }
-  45% { transform: scale(1.02); }
-  100% { transform: scale(1); }
+.time-selects .sel {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--texto-suave);
 }
 
-@keyframes daySel {
-  0% { transform: scale(0.82); }
-  60% { transform: scale(1.06); }
-  100% { transform: scale(1); }
+.time-selects select {
+  width: 100%;
+  min-height: 2.35rem;
+  border-radius: 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--rojo) 30%, var(--linea));
+  background: var(--superficie-2);
+  color: var(--texto);
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 700;
+  padding: 0.35rem 0.5rem;
 }
 
-@keyframes timeTick {
-  0% { transform: scale(0.92); }
-  100% { transform: scale(1); }
-}
+@media (max-width: 700px) {
+  .fecha-trigger {
+    min-height: 2.4rem;
+    padding: 0.4rem 0.6rem;
+  }
 
-@keyframes gridDer {
-  from { opacity: 0; transform: translateX(8px); }
-  to { opacity: 1; transform: translateX(0); }
-}
+  .fecha-texto {
+    font-size: 0.9rem;
+  }
 
-@keyframes gridIzq {
-  from { opacity: 0; transform: translateX(-8px); }
-  to { opacity: 1; transform: translateX(0); }
-}
+  .fhp.compact {
+    gap: 0.4rem;
+  }
 
-@keyframes gridIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+  .time-selects select {
+    min-height: 2.45rem;
+    font-size: 1.05rem;
+  }
 
-@keyframes tituloIn {
-  from { opacity: 0; transform: translateY(-2px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes ringSpin {
-  to { transform: rotate(360deg); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .fhp, .hero.pop, .day.sel, .h-btn.activo, .m-btn.activo, .week-row, .cal-titulo, .reloj-ring {
-    animation: none !important;
+  .time-label.hint {
+    font-size: 0.7rem;
   }
 }
+

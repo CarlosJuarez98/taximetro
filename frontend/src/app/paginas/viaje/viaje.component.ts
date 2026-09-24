@@ -4,6 +4,8 @@ import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ApiService } from '../../api.service';
 import { FechaHoraPickerComponent } from '../../fecha-hora-picker/fecha-hora-picker.component';
+import { SugerenciaCampoComponent } from '../../sugerencia-campo.component';
+import { FeedbackService } from '../../feedback.service';
 import { HUAMANTLA, CASA_KEY, CasaGps, RESERVA_BORRADOR_KEY, ReservaBorrador, Tarifa, Viaje } from '../../modelos';
 import { calcularCobroPorKm, clampHoraFranja, dinero, duracionLegible, esNoche, haversineMetros, mmss, redondearPago } from '../../cobro.util';
 import { compartirWhatsappTarjeta, sloganAleatorio } from '../../whatsapp.util';
@@ -16,19 +18,23 @@ type ModoHorario = 'ahora' | 'dia' | 'noche';
 @Component({
   selector: 'app-viaje',
   standalone: true,
-  imports: [FormsModule, FechaHoraPickerComponent],
+  imports: [FormsModule, FechaHoraPickerComponent, SugerenciaCampoComponent],
   templateUrl: './viaje.component.html',
   styleUrl: './viaje.component.css',
 })
 export class ViajeComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
+  private readonly feedback = inject(FeedbackService);
 
   tarifa: Tarifa | null = null;
   error = '';
   accionando = false;
   enCurso: Viaje | null = null;
   recibo: Viaje | null = null;
+  /** Billete con que paga (para calcular cambio). */
+  billetePago: number | null = null;
+  readonly billetesRapidos = [50, 100, 200, 500, 1000];
 
   /** Km con el cliente a bordo (GPS en vivo o Maps). */
   kmCliente: number | null = null;
@@ -46,11 +52,14 @@ export class ViajeComponent implements OnInit, OnDestroy {
   modoRegreso: Proporcion = 'nada';
   /** Para estimar un viaje de otro día / otra hora. */
   modoHorario: ModoHorario = 'ahora';
-  /** Texto libre: “sábado 10 am”, “mañana noche”… */
+  /** Texto libre legacy / nota corta. */
   paraCuando = '';
   /** Fecha/hora concreta al cotizar día o noche (pendiente). */
   cuandoLocal = '';
   clienteCotiza = '';
+  destinoCotiza = '';
+  clientesHist: string[] = [];
+  destinosHist: string[] = [];
   okMsg = '';
 
   cobroVivo = 0;
@@ -59,6 +68,8 @@ export class ViajeComponent implements OnInit, OnDestroy {
   ultimoDesglose = '';
   /** GPS midiendo km en vivo. */
   gpsActivo = false;
+  /** GPS falló o no disponible: km editables a mano. */
+  gpsFallo = false;
   /** Ya hay casa guardada (para vacío automático). */
   casaLista = false;
   /**
@@ -73,6 +84,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
 
   private tick?: number;
   private gpsWatchId?: number;
+  private gpsSinSenalTimer?: number;
   private metrosGps = 0;
   private lastLat: number | null = null;
   private lastLng: number | null = null;
@@ -83,6 +95,20 @@ export class ViajeComponent implements OnInit, OnDestroy {
 
   get hayViaje(): boolean {
     return this.enCurso?.estado === 'EN_CURSO';
+  }
+
+  /**
+   * Km que mide el GPS ahora van bloqueados.
+   * Solo se editan a mano si falló el GPS.
+   */
+  get kmGpsBloqueado(): boolean {
+    return this.hayViaje && !this.gpsFallo;
+  }
+
+  get kmGpsLabel(): string {
+    if (this.gpsFallo) return 'Manual (GPS falló)';
+    if (this.gpsActivo) return 'GPS midiendo…';
+    return 'GPS';
   }
 
   /** Vas de la base al cliente (aún no sube). */
@@ -224,6 +250,27 @@ export class ViajeComponent implements OnInit, OnDestroy {
     return mmss(this.recibo?.segundosEspera || 0);
   }
 
+  get totalReciboNum(): number {
+    return Math.round(Number(this.recibo?.cobro || 0));
+  }
+
+  get cambioRecibo(): number | null {
+    if (this.billetePago == null || this.billetePago <= 0) return null;
+    return Math.round(this.billetePago - this.totalReciboNum);
+  }
+
+  get cambioTxt(): string {
+    const c = this.cambioRecibo;
+    if (c == null) return '';
+    if (c < 0) return `Faltan ${dinero(-c)}`;
+    if (c === 0) return 'Pago exacto';
+    return `Cambio ${dinero(c)}`;
+  }
+
+  setBillete(n: number): void {
+    this.billetePago = n;
+  }
+
   get franjaPicker(): 'dia' | 'noche' | 'todas' {
     if (this.modoHorario === 'dia') return 'dia';
     if (this.modoHorario === 'noche') return 'noche';
@@ -259,6 +306,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.casaLista = !!this.leerCasaRaw();
+    this.cargarHistorial();
     this.subs.add(
       this.api.tarifa().subscribe({
         next: (t) => {
@@ -273,6 +321,21 @@ export class ViajeComponent implements OnInit, OnDestroy {
         if (v && v.id && v.estado === 'EN_CURSO') {
           this.reanudar(v as Viaje);
         }
+      }),
+    );
+  }
+
+  private cargarHistorial(): void {
+    this.subs.add(
+      this.api.historialClientes().subscribe({
+        next: (l) => (this.clientesHist = l || []),
+        error: () => {},
+      }),
+    );
+    this.subs.add(
+      this.api.historialDestinos().subscribe({
+        next: (l) => (this.destinosHist = l || []),
+        error: () => {},
       }),
     );
   }
@@ -323,15 +386,23 @@ export class ViajeComponent implements OnInit, OnDestroy {
       return;
     }
     this.error = '';
-    const nota = (this.paraCuando || '').trim();
+    this.okMsg = '';
+    const nota = (this.destinoCotiza || this.paraCuando || '').trim();
     void compartirWhatsappTarjeta({
       tipo: 'estimado',
       totalTxt: this.cotizacionTxt,
       nota: nota || undefined,
       slogan: sloganAleatorio(),
-    }).catch(() => {
-      this.error = 'No se pudo armar el mensaje.';
-    });
+    })
+      .then((r) => {
+        if (r.pegarCaption) {
+          this.okMsg =
+            'Foto lista. En WhatsApp toca «Añadir mensaje» y pega (el texto ya está copiado).';
+        }
+      })
+      .catch(() => {
+        this.error = 'No se pudo armar el mensaje.';
+      });
   }
 
   irAReservar(): void {
@@ -349,6 +420,9 @@ export class ViajeComponent implements OnInit, OnDestroy {
       this.forzarNocheCotiza,
     );
     const cobro = this.totalPago(r.cobro);
+    const destino =
+      (this.destinoCotiza || '').trim() || this.desgloseKm || null;
+    const cliente = (this.clienteCotiza || '').trim() || 'Cliente';
 
     // Día / noche → queda como pendiente; confirmar después en Agenda
     if (this.modoHorario === 'dia' || this.modoHorario === 'noche') {
@@ -361,8 +435,8 @@ export class ViajeComponent implements OnInit, OnDestroy {
       this.api
         .crearReserva({
           cuando: new Date(this.cuandoLocal).toISOString(),
-          cliente: (this.clienteCotiza || '').trim() || 'Cliente',
-          destinoTexto: this.desgloseKm || null,
+          cliente,
+          destinoTexto: destino,
           kmEstimado: this.kmCobrables,
           cobroEstimado: cobro,
           casetas: this.casetasTotal,
@@ -393,7 +467,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
     }
 
     const borrador: ReservaBorrador = {
-      destinoTexto: this.desgloseKm || undefined,
+      destinoTexto: destino || undefined,
       kmEstimado: this.kmCobrables,
       cobroEstimado: cobro,
       casetas: this.casetasTotal,
@@ -459,8 +533,11 @@ export class ViajeComponent implements OnInit, OnDestroy {
   banderazo(clienteAqui = false): void {
     if (this.accionando) return;
     this.accionando = true;
+    this.feedback.tap();
+    this.feedback.start(clienteAqui ? 'Arrancando GPS…' : 'Saliendo por el cliente…');
     this.error = '';
     this.okMsg = '';
+    this.gpsFallo = false;
     this.recibo = null;
     this.ultimoDesglose = '';
     this.esperaAcumuladaSeg = Math.round(Math.max(0, Number(this.minEsperaCotiza) || 0) * 60);
@@ -485,6 +562,8 @@ export class ViajeComponent implements OnInit, OnDestroy {
           .subscribe({
             next: (v) => {
               this.accionando = false;
+              this.feedback.stop();
+              this.feedback.ok();
               this.enCurso = v;
               this.inicioMs = Date.now();
               this.segundos = 0;
@@ -493,23 +572,27 @@ export class ViajeComponent implements OnInit, OnDestroy {
               this.recalcularVivo();
               this.iniciarTick();
               if (pos.gps) {
+                this.gpsFallo = false;
                 this.iniciarGps();
                 this.okMsg = clienteAqui
                   ? 'Cliente a bordo. GPS contando. Corte cuando diga “aquí”.'
                   : 'Vas por el cliente. Cuando lo subas toca “Recogí cliente”.';
               } else {
-                this.gpsActivo = false;
-                this.error = 'Sin GPS: pon los km a mano o activa la ubicación.';
+                this.marcarGpsFallo('Sin GPS. Pon los km a mano o activa la ubicación.');
               }
             },
             error: (e) => {
               this.accionando = false;
+              this.feedback.stop();
+              this.feedback.error();
               this.error = e?.error?.error || 'No se pudo dar banderazo.';
             },
           });
       })
       .catch(() => {
         this.accionando = false;
+        this.feedback.stop();
+        this.feedback.error();
         this.error = 'Activa la ubicación del teléfono para el taxímetro.';
       });
   }
@@ -517,16 +600,26 @@ export class ViajeComponent implements OnInit, OnDestroy {
   /** Marca que el cliente ya subió: cierra vacío ida y empieza km con él. */
   recogiCliente(): void {
     if (!this.hayViaje || this.faseViaje === 'con_cliente') return;
+    this.feedback.tap();
+    this.feedback.ok();
     this.pausarEspera();
-    this.kmVacioIda = Math.round((this.metrosGps / 1000) * 100) / 100;
+    if (!this.gpsFallo) {
+      this.kmVacioIda = Math.round((this.metrosGps / 1000) * 100) / 100;
+    }
     this.metrosGps = 0;
     this.kmCliente = 0;
+    this.lastLat = null;
+    this.lastLng = null;
     this.faseViaje = 'con_cliente';
     this.error = '';
     this.okMsg =
       this.kmVacioIda > 0
         ? `Vacío ida ${this.kmVacioIda.toFixed(1)} km. Ahora cobra con el cliente.`
         : 'Cliente a bordo. El GPS cuenta el viaje.';
+    // Si el GPS sigue vivo, sigue midiendo; si ya había fallado, sigue manual
+    if (!this.gpsFallo && !this.gpsActivo) {
+      this.iniciarGps();
+    }
     this.recalcularVivo();
   }
 
@@ -540,6 +633,8 @@ export class ViajeComponent implements OnInit, OnDestroy {
       this.error = 'Aún no hay km. Espera al GPS o ponlos a mano.';
       return;
     }
+    this.feedback.tap();
+    this.feedback.start('Cortando viaje…');
     this.pausarEspera();
     this.enviarPuntosPendientes();
     this.detenerGps();
@@ -561,15 +656,21 @@ export class ViajeComponent implements OnInit, OnDestroy {
       this.api.corte(this.enCurso!.id, [], this.kmCobrables, minEspera, this.casetasTotal).subscribe({
         next: (v) => {
           this.accionando = false;
+          this.feedback.stop();
+          this.feedback.ok();
           this.recibo = v;
+          this.billetePago = null;
           this.cobroVivo = Number(v.cobro);
           this.segundos = v.duracionSegundos;
           this.enCurso = null;
           this.faseViaje = 'vacio';
+          this.gpsFallo = false;
           this.limpiarTick();
         },
         error: (e) => {
           this.accionando = false;
+          this.feedback.stop();
+          this.feedback.error();
           this.error = e?.error?.error || 'No se pudo cortar el viaje.';
         },
       });
@@ -578,23 +679,30 @@ export class ViajeComponent implements OnInit, OnDestroy {
 
   cancelar(): void {
     if (!this.enCurso || this.accionando) return;
+    this.feedback.tap();
+    this.feedback.start('Cancelando…');
     this.pausarEspera();
     this.detenerGps();
     this.accionando = true;
     this.api.cancelar(this.enCurso.id).subscribe({
       next: () => {
         this.accionando = false;
+        this.feedback.stop();
+        this.feedback.tap();
         this.enCurso = null;
         this.cobroVivo = 0;
         this.segundos = 0;
         this.esperaAcumuladaSeg = 0;
         this.metrosGps = 0;
         this.faseViaje = 'vacio';
+        this.gpsFallo = false;
         this.okMsg = '';
         this.limpiarTick();
       },
       error: (e) => {
         this.accionando = false;
+        this.feedback.stop();
+        this.feedback.error();
         this.error = e?.error?.error || 'No se pudo cancelar.';
       },
     });
@@ -602,18 +710,28 @@ export class ViajeComponent implements OnInit, OnDestroy {
 
   cerrarRecibo(): void {
     this.recibo = null;
+    this.billetePago = null;
   }
 
   compartirWhatsapp(): void {
     if (!this.recibo) return;
+    this.error = '';
+    this.okMsg = '';
     void compartirWhatsappTarjeta({
       tipo: 'recibo',
       totalTxt: dinero(Number(this.recibo.cobro)),
       duracionTxt: duracionLegible(this.recibo.duracionSegundos || 0),
       slogan: sloganAleatorio(),
-    }).catch(() => {
-      this.error = 'No se pudo armar el recibo.';
-    });
+    })
+      .then((r) => {
+        if (r.pegarCaption) {
+          this.okMsg =
+            'Foto lista. En WhatsApp toca «Añadir mensaje» y pega (el texto ya está copiado).';
+        }
+      })
+      .catch(() => {
+        this.error = 'No se pudo armar el recibo.';
+      });
   }
 
   tiempoTxt(): string {
@@ -734,19 +852,61 @@ export class ViajeComponent implements OnInit, OnDestroy {
 
   private iniciarGps(): void {
     this.detenerGps();
+    this.gpsFallo = false;
     if (!navigator.geolocation) {
-      this.gpsActivo = false;
+      this.marcarGpsFallo('Este teléfono no tiene GPS. Pon los km a mano.');
       return;
     }
     this.gpsActivo = true;
+    // Si en 18s no hay señal útil, desbloquea captura manual
+    this.gpsSinSenalTimer = window.setTimeout(() => {
+      if (!this.hayViaje || this.gpsFallo) return;
+      if (this.metrosGps < 8) {
+        this.marcarGpsFallo('El GPS no responde. Ya puedes poner los km a mano.');
+      }
+    }, 18000);
+
     this.gpsWatchId = navigator.geolocation.watchPosition(
-      (p) => this.onGps(p),
-      () => {
-        this.gpsActivo = false;
+      (p) => {
+        if (this.gpsSinSenalTimer != null) {
+          window.clearTimeout(this.gpsSinSenalTimer);
+          this.gpsSinSenalTimer = undefined;
+        }
+        // Una vez en modo manual por fallo, no volver a bloquear en este viaje
+        if (!this.gpsFallo) {
+          this.gpsActivo = true;
+        }
+        this.onGps(p);
+      },
+      (err) => {
+        this.marcarGpsFallo(this.msgErrorGps(err));
       },
       { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 },
     );
     this.flushTimer = window.setInterval(() => this.enviarPuntosPendientes(), 12000);
+  }
+
+  private marcarGpsFallo(msg: string): void {
+    this.gpsActivo = false;
+    this.gpsFallo = true;
+    this.error = msg;
+    if (this.gpsSinSenalTimer != null) {
+      window.clearTimeout(this.gpsSinSenalTimer);
+      this.gpsSinSenalTimer = undefined;
+    }
+  }
+
+  private msgErrorGps(err: GeolocationPositionError): string {
+    switch (err.code) {
+      case err.PERMISSION_DENIED:
+        return 'Permiso de ubicación denegado. Pon los km a mano.';
+      case err.POSITION_UNAVAILABLE:
+        return 'GPS sin señal. Pon los km a mano.';
+      case err.TIMEOUT:
+        return 'GPS tardó demasiado. Pon los km a mano.';
+      default:
+        return 'GPS falló. Pon los km a mano.';
+    }
   }
 
   private detenerGps(): void {
@@ -758,11 +918,15 @@ export class ViajeComponent implements OnInit, OnDestroy {
       window.clearInterval(this.flushTimer);
       this.flushTimer = undefined;
     }
+    if (this.gpsSinSenalTimer != null) {
+      window.clearTimeout(this.gpsSinSenalTimer);
+      this.gpsSinSenalTimer = undefined;
+    }
     this.gpsActivo = false;
   }
 
   private onGps(p: GeolocationPosition): void {
-    if (!this.hayViaje) return;
+    if (!this.hayViaje || this.gpsFallo) return;
     const acc = p.coords.accuracy ?? 99;
     if (acc > 45) return;
     const lat = p.coords.latitude;

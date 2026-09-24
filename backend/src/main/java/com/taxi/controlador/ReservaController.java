@@ -36,6 +36,16 @@ public class ReservaController {
         return servicio.pendientes();
     }
 
+    @GetMapping("/historial/clientes")
+    public List<String> historialClientes() {
+        return servicio.historialClientes();
+    }
+
+    @GetMapping("/historial/destinos")
+    public List<String> historialDestinos() {
+        return servicio.historialDestinos();
+    }
+
     @GetMapping
     public List<ReservaDto> listar(
             @RequestParam(required = false) Instant desde,

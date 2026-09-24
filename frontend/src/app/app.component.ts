@@ -1,24 +1,38 @@
+import { AsyncPipe } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
-import { NavigationEnd, Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { filter } from 'rxjs';
+import {
+  NavigationCancel,
+  NavigationEnd,
+  NavigationError,
+  NavigationStart,
+  Router,
+  RouterLink,
+  RouterLinkActive,
+  RouterOutlet,
+} from '@angular/router';
 import { AuthService } from './auth.service';
+import { FeedbackService } from './feedback.service';
+import { RecordatorioService } from './recordatorio.service';
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, AsyncPipe],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css',
 })
 export class AppComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
+  private readonly avisos = inject(RecordatorioService);
+  readonly feedback = inject(FeedbackService);
 
   esLogin = false;
   esViaje = false;
   sesionActiva = false;
   esAdmin = false;
   nombre = '';
+  navBusy = false;
 
   readonly links = [
     { path: '/viaje', label: 'Viaje', icon: '▣' },
@@ -29,15 +43,38 @@ export class AppComponent implements OnInit {
 
   ngOnInit(): void {
     this.syncRuta(this.router.url);
-    this.router.events.pipe(filter((e) => e instanceof NavigationEnd)).subscribe((e) => {
-      this.syncRuta((e as NavigationEnd).urlAfterRedirects);
+    this.router.events.subscribe((e) => {
+      if (e instanceof NavigationStart) {
+        this.navBusy = true;
+        this.feedback.start('Cambiando…');
+        this.feedback.tap();
+      } else if (
+        e instanceof NavigationEnd ||
+        e instanceof NavigationCancel ||
+        e instanceof NavigationError
+      ) {
+        this.navBusy = false;
+        this.feedback.stop();
+        if (e instanceof NavigationEnd) {
+          this.syncRuta(e.urlAfterRedirects);
+        }
+      }
     });
     this.auth.authChanges$.subscribe((m) => {
       this.sesionActiva = !!m?.authenticated;
       this.esAdmin = m?.rol === 'ADMIN';
       this.nombre = m?.nombre || m?.username || '';
+      if (m?.authenticated && this.avisos.activo) {
+        this.avisos.start();
+      } else if (!m?.authenticated) {
+        this.avisos.stop();
+      }
     });
     this.auth.me().subscribe();
+  }
+
+  onDockClick(): void {
+    this.feedback.tap();
   }
 
   private syncRuta(url: string): void {
@@ -55,6 +92,8 @@ export class AppComponent implements OnInit {
   }
 
   salir(): void {
+    this.feedback.tap();
+    this.avisos.stop();
     this.auth.logout().subscribe({
       next: () => void this.router.navigateByUrl('/login'),
       error: () => void this.router.navigateByUrl('/login'),

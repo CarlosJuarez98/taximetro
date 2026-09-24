@@ -161,3 +161,141 @@ label {
 @media (max-width: 420px) {
   .card { padding: 0.4rem 0.5rem; }
 }
+
+/* Calendario popup (body): estilo productos-limpieza, tema taxi */
+.cal-pop {
+  box-sizing: border-box;
+  padding: 0.75rem;
+  border: 1px solid color-mix(in srgb, var(--rojo) 30%, var(--linea));
+  border-radius: 0.85rem;
+  background: linear-gradient(165deg, #1a1418, #100e12 70%);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
+  overscroll-behavior: contain;
+  color: var(--texto);
+  font: inherit;
+}
+
+.cal-cab {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
+}
+
+.cal-mes {
+  font-size: 0.95rem;
+  font-weight: 750;
+}
+
+.cal-nav {
+  width: 2.1rem !important;
+  height: 2.1rem !important;
+  min-width: 2.1rem !important;
+  min-height: 2.1rem !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  font-size: 1.25rem !important;
+  line-height: 1 !important;
+  background: var(--superficie-2) !important;
+  color: var(--texto) !important;
+  border: 1px solid var(--linea) !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.cal-nav:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--rojo) 22%, var(--superficie-2)) !important;
+  border-color: color-mix(in srgb, var(--rojo) 50%, var(--linea)) !important;
+}
+
+.cal-nav:disabled {
+  opacity: 0.28 !important;
+  cursor: default !important;
+  pointer-events: none;
+}
+
+.cal-vacio {
+  visibility: hidden;
+  pointer-events: none;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.2rem;
+}
+
+.cal-grid.dias-cab {
+  margin-bottom: 0.25rem;
+}
+
+.cal-grid.dias-cab span {
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--texto-suave);
+  padding: 0.2rem 0;
+}
+
+.cal-dia {
+  width: 100% !important;
+  height: 2.15rem !important;
+  min-height: 2.15rem !important;
+  max-height: 2.15rem !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0.45rem !important;
+  background: transparent !important;
+  color: var(--texto) !important;
+  font: inherit !important;
+  font-size: 0.84rem !important;
+  font-weight: 650 !important;
+  font-variant-numeric: tabular-nums;
+  box-shadow: none !important;
+  transform: none !important;
+  cursor: pointer;
+  line-height: 1 !important;
+}
+
+.cal-dia:hover:not(:disabled):not(.disabled) {
+  background: color-mix(in srgb, var(--rojo) 18%, var(--superficie-2)) !important;
+}
+
+.cal-dia.hoy:not(.inicio):not(.fin) {
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--rojo) 55%, var(--linea)) !important;
+}
+
+.cal-dia.inicio,
+.cal-dia.fin {
+  background: linear-gradient(135deg, #ff5a67, var(--rojo)) !important;
+  color: #fff !important;
+}
+
+.cal-dia.inicio.fin {
+  border-radius: 0.45rem !important;
+}
+
+.cal-dia.disabled,
+.cal-dia:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.cal-acc {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+
+.cal-btn {
+  min-height: 2.1rem !important;
+  height: auto !important;
+  padding: 0.3rem 0.75rem !important;
+  font-size: 0.82rem !important;
+}
