@@ -1,35 +1,28 @@
 .hoy {
   display: grid;
-  gap: 0.55rem;
+  gap: 0.4rem;
 }
 
-h1 { font-size: 1.15rem; }
+h1 { font-size: 1.05rem; }
 h2 {
-  font-size: 0.85rem;
+  font-size: 0.78rem;
   color: var(--texto-suave);
   letter-spacing: 0.08em;
 }
 
 .totales {
   text-align: center;
+  padding-top: 0.55rem;
+  padding-bottom: 0.55rem;
   background:
     radial-gradient(80% 90% at 50% -30%, rgba(255, 30, 50, 0.28), transparent 55%),
     linear-gradient(165deg, #1a1014, #100c10 70%);
 }
 
-.label {
-  margin: 0;
-  color: var(--texto-suave);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 0.68rem;
-  font-weight: 800;
-}
-
 .monto {
-  margin: 0.1rem 0 0.25rem;
+  margin: 0.05rem 0 0.15rem;
   font-family: Oswald, sans-serif;
-  font-size: 2.4rem;
+  font-size: clamp(1.9rem, 8vw, 2.3rem);
   font-weight: 700;
   text-shadow: 0 0 24px rgba(255, 30, 50, 0.45);
 }
@@ -37,15 +30,24 @@ h2 {
 .stats {
   display: flex;
   justify-content: center;
-  gap: 0.9rem;
+  gap: 0.7rem;
   color: var(--texto-suave);
-  font-size: 0.82rem;
+  font-size: 0.75rem;
   font-weight: 700;
 }
 
 .caja {
   display: grid;
-  gap: 0.4rem;
+  gap: 0.35rem;
+}
+
+.label {
+  margin: 0;
+  color: var(--texto-suave);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.62rem;
+  font-weight: 800;
 }
 
 .caja-fila {
@@ -182,11 +184,17 @@ h2 {
 .fila {
   display: flex;
   justify-content: space-between;
-  gap: 0.7rem;
-  padding: 0.55rem 0.65rem;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
 }
 
-.fila p, .fila strong { margin: 0; font-size: 0.9rem; }
+.fila p, .fila strong { margin: 0; font-size: 0.82rem; }
+
+@media (min-width: 900px) {
+  .monto { font-size: clamp(1.7rem, 3.5vw, 2.1rem); }
+  .totales { padding-top: 0.45rem; padding-bottom: 0.45rem; }
+  .stats { gap: 0.5rem; font-size: 0.72rem; }
+}
 
 .izq { min-width: 0; }
 

@@ -2,13 +2,14 @@ import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ApiService } from '../../api.service';
+import { FechaHoraPickerComponent } from '../../fecha-hora-picker/fecha-hora-picker.component';
 import { RESERVA_BORRADOR_KEY, Reserva, ReservaBorrador } from '../../modelos';
 import { dinero } from '../../cobro.util';
 
 @Component({
   selector: 'app-agenda',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, FechaHoraPickerComponent],
   templateUrl: './agenda.component.html',
   styleUrl: './agenda.component.css',
 })

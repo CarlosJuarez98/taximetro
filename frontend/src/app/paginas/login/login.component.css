@@ -1,0 +1,46 @@
+.login {
+  min-height: 70vh;
+  display: grid;
+  place-items: center;
+  padding: 0.75rem 0.5rem;
+}
+
+.form {
+  width: min(100%, 20rem);
+  display: grid;
+  gap: 0.45rem;
+  text-align: center;
+}
+
+.logo {
+  margin: 0 auto;
+  border-radius: 0.75rem;
+  width: 72px;
+  height: 72px;
+}
+
+h1 {
+  margin: 0;
+  font-family: Oswald, sans-serif;
+  font-size: 1.2rem;
+}
+
+.sub {
+  margin: 0 0 0.2rem;
+  color: var(--texto-suave);
+  font-size: 0.75rem;
+}
+
+label {
+  display: grid;
+  gap: 0.12rem;
+  text-align: left;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--texto-suave);
+}
+
+.grande {
+  margin-top: 0.15rem;
+  min-height: 2.5rem;
+}

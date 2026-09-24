@@ -6,6 +6,34 @@ export interface TarjetaWhatsapp {
   cuando?: string;
   detalle?: string;
   nota?: string;
+  /** Tiempo que duró el viaje (recibo). */
+  duracionTxt?: string;
+  slogan?: string;
+}
+
+const SLOGANS = [
+  '¡Huamantla se mueve en rojo!',
+  'Rápido, seguro… y bien rojo.',
+  'Tu viaje, nuestro orgullo.',
+  'Llegamos a tiempo. Llegamos en rojo.',
+  'Más que un taxi: Viaja en el Rojo.',
+  'La ruta más viva de Tlaxcala.',
+  'Confort, trato y el rojo que te distingue.',
+  'Del A al B… con estilo.',
+  'Gracias por elegir el rojo.',
+  '¡Nos vemos en el próximo viaje!',
+  'Rojo por fuera, confianza por dentro.',
+  'Cuando el reloj corre, el Rojo llega.',
+  'Tu destino, nuestra misión.',
+  'Huamantla confía en el Rojo.',
+  'Un viaje corto… un gran detalle.',
+];
+
+const LEYENDA_ESTIMADO =
+  'El precio puede variar por tráfico, espera, desvíos u otras condiciones del viaje.';
+
+export function sloganAleatorio(): string {
+  return SLOGANS[Math.floor(Math.random() * SLOGANS.length)];
 }
 
 function loadImage(src: string): Promise<HTMLImageElement | null> {
@@ -34,6 +62,34 @@ function roundRect(
   ctx.arcTo(x, y + h, x, y, rr);
   ctx.arcTo(x, y, x + w, y, rr);
   ctx.closePath();
+}
+
+function wrapText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  lineHeight: number,
+): number {
+  const words = text.split(/\s+/);
+  let line = '';
+  let yy = y;
+  for (const w of words) {
+    const test = line ? `${line} ${w}` : w;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      ctx.fillText(line, x, yy);
+      line = w;
+      yy += lineHeight;
+    } else {
+      line = test;
+    }
+  }
+  if (line) {
+    ctx.fillText(line, x, yy);
+    yy += lineHeight;
+  }
+  return yy;
 }
 
 /** Genera PNG de tarjeta de marca (1080×1080). */
@@ -67,10 +123,10 @@ export async function crearTarjetaWhatsapp(data: TarjetaWhatsapp): Promise<Blob>
 
   const logo = await loadImage('/logo.png');
   if (logo) {
-    const lw = 220;
-    const lh = 220;
+    const lw = 200;
+    const lh = 200;
     const lx = (size - lw) / 2;
-    const ly = 90;
+    const ly = 70;
     ctx.save();
     roundRect(ctx, lx, ly, lw, lh, 36);
     ctx.clip();
@@ -83,51 +139,88 @@ export async function crearTarjetaWhatsapp(data: TarjetaWhatsapp): Promise<Blob>
   }
 
   ctx.fillStyle = '#ffffff';
-  ctx.font = '700 52px Oswald, Arial, sans-serif';
+  ctx.font = '700 48px Oswald, Arial, sans-serif';
   ctx.textAlign = 'center';
-  ctx.fillText('VIAJA EN EL ROJO', size / 2, 360);
+  ctx.fillText('VIAJA EN EL ROJO', size / 2, 320);
 
   ctx.fillStyle = '#ff4d5c';
-  ctx.font = '800 28px Manrope, Arial, sans-serif';
-  ctx.letterSpacing = '4px';
-  const titulo = data.tipo === 'estimado' ? 'ESTIMADO' : 'RECIBO';
-  ctx.fillText(titulo, size / 2, 420);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.font = '700 140px Oswald, Arial, sans-serif';
-  ctx.fillText(data.totalTxt, size / 2, 580);
+  ctx.font = '800 26px Manrope, Arial, sans-serif';
+  const titulo = data.tipo === 'estimado' ? 'ESTIMADO' : 'RECIBO DE VIAJE';
+  ctx.fillText(titulo, size / 2, 370);
 
   ctx.fillStyle = '#c4a8ae';
-  ctx.font = '600 36px Manrope, Arial, sans-serif';
-  let y = 660;
-  if (data.cuando) {
-    ctx.fillText(data.cuando, size / 2, y);
-    y += 52;
+  ctx.font = '700 22px Manrope, Arial, sans-serif';
+  ctx.fillText('TOTAL', size / 2, 430);
+
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '700 120px Oswald, Arial, sans-serif';
+  ctx.fillText(data.totalTxt, size / 2, 545);
+
+  let y = 600;
+  if (data.duracionTxt) {
+    ctx.fillStyle = '#c4a8ae';
+    ctx.font = '700 22px Manrope, Arial, sans-serif';
+    ctx.fillText('TIEMPO', size / 2, y);
+    y += 42;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '700 44px Oswald, Arial, sans-serif';
+    ctx.fillText(data.duracionTxt, size / 2, y);
+    y += 50;
   }
-  if (data.detalle) {
-    ctx.fillText(data.detalle, size / 2, y);
-    y += 52;
+
+  // Nota opcional del cliente (no “de día / de noche”)
+  const nota = (data.nota || data.cuando || '').trim();
+  if (nota && !esEtiquetaHorario(nota)) {
+    ctx.fillStyle = '#c4a8ae';
+    ctx.font = '600 28px Manrope, Arial, sans-serif';
+    y = wrapText(ctx, nota, size / 2, y, size - 180, 34) + 12;
   }
-  if (data.nota) {
-    ctx.fillStyle = '#8a7076';
-    ctx.font = '500 28px Manrope, Arial, sans-serif';
-    ctx.fillText(data.nota, size / 2, y + 10);
+
+  if (data.tipo === 'estimado') {
+    ctx.fillStyle = 'rgba(196,168,174,0.9)';
+    ctx.font = '600 24px Manrope, Arial, sans-serif';
+    y = wrapText(ctx, LEYENDA_ESTIMADO, size / 2, y + 8, size - 160, 32) + 16;
   }
+
+  const slogan = data.slogan || sloganAleatorio();
+  ctx.fillStyle = '#ff4d5c';
+  ctx.font = '700 28px Manrope, Arial, sans-serif';
+  wrapText(ctx, slogan, size / 2, Math.min(Math.max(y + 20, 780), 880), size - 160, 36);
+
+  ctx.fillStyle = 'rgba(196,168,174,0.7)';
+  ctx.font = '600 22px Manrope, Arial, sans-serif';
+  ctx.fillText('Huamantla', size / 2, 1000);
 
   return await new Promise((resolve, reject) => {
     canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('No se pudo crear la imagen'))), 'image/png');
   });
 }
 
+function esEtiquetaHorario(t: string): boolean {
+  const s = t.trim().toLowerCase();
+  return s === 'de día' || s === 'de dia' || s === 'de noche' || s === 'ahora' || s === 'día' || s === 'dia' || s === 'noche';
+}
+
 function textoCorto(data: TarjetaWhatsapp): string {
+  const slogan = data.slogan || sloganAleatorio();
   const lineas = ['*Viaja en el Rojo*'];
   if (data.tipo === 'estimado') {
-    lineas.push(data.cuando ? `Estimado · ${data.cuando}` : 'Estimado');
+    lineas.push('Estimado');
   } else {
     lineas.push('Viaje cerrado');
   }
-  lineas.push(`*${data.totalTxt}*`);
-  if (data.detalle) lineas.push(data.detalle);
+  lineas.push(`Total: *${data.totalTxt}*`);
+  if (data.duracionTxt) {
+    lineas.push(`Tiempo: *${data.duracionTxt}*`);
+  }
+  const nota = (data.nota || data.cuando || '').trim();
+  if (nota && !esEtiquetaHorario(nota)) {
+    lineas.push(nota);
+  }
+  if (data.tipo === 'estimado') {
+    lineas.push(LEYENDA_ESTIMADO);
+  }
+  lineas.push(`_${slogan}_`);
   return lineas.join('\n');
 }
 
@@ -136,8 +229,9 @@ function textoCorto(data: TarjetaWhatsapp): string {
  * Si no se puede, abre WhatsApp con texto corto y descarga la tarjeta.
  */
 export async function compartirWhatsappTarjeta(data: TarjetaWhatsapp): Promise<void> {
-  const texto = textoCorto(data);
-  const blob = await crearTarjetaWhatsapp(data);
+  const payload = { ...data, slogan: data.slogan || sloganAleatorio() };
+  const texto = textoCorto(payload);
+  const blob = await crearTarjetaWhatsapp(payload);
   const file = new File([blob], data.tipo === 'estimado' ? 'estimado-viaja-en-el-rojo.png' : 'recibo-viaja-en-el-rojo.png', {
     type: 'image/png',
   });
@@ -160,7 +254,6 @@ export async function compartirWhatsappTarjeta(data: TarjetaWhatsapp): Promise<v
     }
   }
 
-  // Fallback: baja la imagen y abre WhatsApp con texto limpio
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

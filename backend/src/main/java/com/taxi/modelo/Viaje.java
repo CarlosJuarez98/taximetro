@@ -69,6 +69,10 @@ public class Viaje {
     @Column(columnDefinition = "CLOB")
     private String rutaGeoJson;
 
+    /** Dueño del viaje (taxista). */
+    @Column(name = "usuario_id")
+    private Long usuarioId;
+
     public Long getId() {
         return id;
     }
@@ -203,5 +207,13 @@ public class Viaje {
 
     public void setRutaGeoJson(String rutaGeoJson) {
         this.rutaGeoJson = rutaGeoJson;
+    }
+
+    public Long getUsuarioId() {
+        return usuarioId;
+    }
+
+    public void setUsuarioId(Long usuarioId) {
+        this.usuarioId = usuarioId;
     }
 }

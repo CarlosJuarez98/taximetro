@@ -10,9 +10,11 @@ import com.taxi.modelo.Viaje;
 
 public interface ViajeRepository extends JpaRepository<Viaje, Long> {
 
-    Optional<Viaje> findFirstByEstadoOrderByInicioDesc(Viaje.Estado estado);
+    Optional<Viaje> findFirstByUsuarioIdAndEstadoOrderByInicioDesc(Long usuarioId, Viaje.Estado estado);
 
-    List<Viaje> findByInicioGreaterThanEqualOrderByInicioDesc(Instant desde);
+    List<Viaje> findByUsuarioIdAndInicioGreaterThanEqualOrderByInicioDesc(Long usuarioId, Instant desde);
 
-    List<Viaje> findTop80ByOrderByInicioDesc();
+    List<Viaje> findTop80ByUsuarioIdOrderByInicioDesc(Long usuarioId);
+
+    Optional<Viaje> findByIdAndUsuarioId(Long id, Long usuarioId);
 }

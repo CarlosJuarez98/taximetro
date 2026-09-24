@@ -26,6 +26,7 @@ import com.taxi.modelo.Viaje;
 import com.taxi.repositorio.CajaDiaRepository;
 import com.taxi.repositorio.PuntoGpsRepository;
 import com.taxi.repositorio.ViajeRepository;
+import com.taxi.seguridad.AuthSupport;
 
 @Service
 public class ViajeService {
@@ -37,6 +38,7 @@ public class ViajeService {
     private final CobroService cobro;
     private final GeoService geo;
     private final ObjectMapper json;
+    private final AuthSupport auth;
 
     public ViajeService(
             ViajeRepository viajes,
@@ -45,7 +47,8 @@ public class ViajeService {
             TarifaService tarifas,
             CobroService cobro,
             GeoService geo,
-            ObjectMapper json) {
+            ObjectMapper json,
+            AuthSupport auth) {
         this.viajes = viajes;
         this.puntos = puntos;
         this.cajas = cajas;
@@ -53,6 +56,7 @@ public class ViajeService {
         this.cobro = cobro;
         this.geo = geo;
         this.json = json;
+        this.auth = auth;
     }
 
     public EstimacionDto.Respuesta estimar(EstimacionDto req) {
@@ -83,14 +87,16 @@ public class ViajeService {
     }
 
     public ViajeDto enCurso() {
-        return viajes.findFirstByEstadoOrderByInicioDesc(Viaje.Estado.EN_CURSO)
+        Long uid = auth.actualId();
+        return viajes.findFirstByUsuarioIdAndEstadoOrderByInicioDesc(uid, Viaje.Estado.EN_CURSO)
                 .map(this::aDto)
                 .orElse(null);
     }
 
     @Transactional
     public ViajeDto iniciar(IniciarViajeDto req) {
-        viajes.findFirstByEstadoOrderByInicioDesc(Viaje.Estado.EN_CURSO).ifPresent(abierto -> {
+        Long uid = auth.actualId();
+        viajes.findFirstByUsuarioIdAndEstadoOrderByInicioDesc(uid, Viaje.Estado.EN_CURSO).ifPresent(abierto -> {
             abierto.setEstado(Viaje.Estado.CANCELADO);
             abierto.setFin(Instant.now());
             abierto.setNotas("Cancelado al iniciar otro viaje");
@@ -98,6 +104,7 @@ public class ViajeService {
         });
         Viaje v = new Viaje();
         v.setEstado(Viaje.Estado.EN_CURSO);
+        v.setUsuarioId(uid);
         v.setInicio(Instant.now());
         v.setOrigenLat(req.origenLat);
         v.setOrigenLng(req.origenLng);
@@ -162,7 +169,8 @@ public class ViajeService {
         v.setDuracionSegundos(res.duracionSegundos());
         v.setSegundosEspera(res.segundosEspera());
         v.setCasetas(casetasBd);
-        v.setCobro(res.cobro().add(casetasBd).setScale(0, RoundingMode.HALF_UP));
+        BigDecimal total = res.cobro().add(casetasBd);
+        v.setCobro(CobroService.redondearCerradoArriba(total, tarifas.actual()));
         if (casetasBd.compareTo(BigDecimal.ZERO) > 0) {
             String nota = "Casetas $" + casetasBd.toPlainString() + " (cliente)";
             v.setNotas(v.getNotas() == null || v.getNotas().isBlank() ? nota : v.getNotas() + " · " + nota);
@@ -190,17 +198,22 @@ public class ViajeService {
     }
 
     public List<ViajeDto> recientes() {
-        return viajes.findTop80ByOrderByInicioDesc().stream().map(this::aDto).toList();
+        Long uid = auth.actualId();
+        return viajes.findTop80ByUsuarioIdOrderByInicioDesc(uid).stream().map(this::aDto).toList();
     }
 
     public List<ViajeDto> listaHoy() {
         Instant desde = inicioHoy();
-        return viajes.findByInicioGreaterThanEqualOrderByInicioDesc(desde).stream().map(this::aDto).toList();
+        Long uid = auth.actualId();
+        return viajes.findByUsuarioIdAndInicioGreaterThanEqualOrderByInicioDesc(uid, desde).stream()
+                .map(this::aDto)
+                .toList();
     }
 
     public ResumenHoyDto hoy() {
         Instant desde = inicioHoy();
-        List<Viaje> lista = viajes.findByInicioGreaterThanEqualOrderByInicioDesc(desde);
+        Long uid = auth.actualId();
+        List<Viaje> lista = viajes.findByUsuarioIdAndInicioGreaterThanEqualOrderByInicioDesc(uid, desde);
         ResumenHoyDto r = new ResumenHoyDto();
         BigDecimal cobrado = BigDecimal.ZERO;
         BigDecimal metros = BigDecimal.ZERO;
@@ -254,7 +267,8 @@ public class ViajeService {
     }
 
     private void aplicarCaja(ResumenHoyDto r, BigDecimal cobrado) {
-        CajaDia caja = cajas.findByFecha(LocalDate.now(CobroService.ZONA)).orElse(null);
+        Long uid = auth.actualId();
+        CajaDia caja = cajas.findByFechaAndUsuarioId(LocalDate.now(CobroService.ZONA), uid).orElse(null);
         BigDecimal fondo = caja == null ? BigDecimal.ZERO : nvl(caja.getFondoInicial());
         fondo = fondo.setScale(2, RoundingMode.HALF_UP);
         BigDecimal esperado = fondo.add(nvl(cobrado)).setScale(2, RoundingMode.HALF_UP);
@@ -272,10 +286,12 @@ public class ViajeService {
     }
 
     private CajaDia cajaHoy() {
+        Long uid = auth.actualId();
         LocalDate hoy = LocalDate.now(CobroService.ZONA);
-        return cajas.findByFecha(hoy).orElseGet(() -> {
+        return cajas.findByFechaAndUsuarioId(hoy, uid).orElseGet(() -> {
             CajaDia n = new CajaDia();
             n.setFecha(hoy);
+            n.setUsuarioId(uid);
             n.setFondoInicial(BigDecimal.ZERO);
             return n;
         });
@@ -314,7 +330,8 @@ public class ViajeService {
     }
 
     private Viaje obtener(Long id) {
-        return viajes.findById(id)
+        Long uid = auth.actualId();
+        return viajes.findByIdAndUsuarioId(id, uid)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Viaje no encontrado"));
     }
 

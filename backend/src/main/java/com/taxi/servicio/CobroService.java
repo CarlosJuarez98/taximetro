@@ -84,7 +84,8 @@ public class CobroService {
             cobro = minimo;
         }
 
-        cobro = cobro.setScale(0, RoundingMode.HALF_UP);
+        cobro = cobro.setScale(0, RoundingMode.CEILING);
+        cobro = redondearCerradoArriba(cobro, tarifa);
 
         return new Resultado(cobro, metros, duracionSeg, esperaSeg, noche);
     }
@@ -118,9 +119,22 @@ public class CobroService {
             cobro = minimo;
         }
 
-        cobro = cobro.setScale(0, RoundingMode.HALF_UP);
+        cobro = cobro.setScale(0, RoundingMode.CEILING);
+        cobro = redondearCerradoArriba(cobro, tarifa);
 
         return new Resultado(cobro, metros, duracionSeg, esperaSeg, noche);
+    }
+
+    /** Siempre hacia arriba a múltiplos de $5 (pago fácil). */
+    static BigDecimal redondearCerradoArriba(BigDecimal cobro, Tarifa tarifa) {
+        if (cobro == null) {
+            return BigDecimal.ZERO;
+        }
+        if (tarifa != null && !tarifa.isRedondearPesos()) {
+            return cobro.setScale(0, RoundingMode.CEILING);
+        }
+        BigDecimal paso = BigDecimal.valueOf(5);
+        return cobro.divide(paso, 0, RoundingMode.CEILING).multiply(paso);
     }
 
     public boolean esNoche(Tarifa tarifa, Instant instante) {

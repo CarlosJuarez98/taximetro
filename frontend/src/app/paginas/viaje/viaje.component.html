@@ -6,9 +6,12 @@
     <p class="ok">{{ okMsg }}</p>
   }
 
-  <div class="card taximetro" [class.en-espera]="esperando" [class.noche]="esNocturno">
+  <div class="card taximetro" [class.en-espera]="esperando" [class.noche]="esNocturno" [class.por-cliente]="yendoPorCliente">
     <div class="taximetro-top">
-      <p class="label">{{ hayViaje ? (esperando ? motivoEsperaTxt : 'En viaje') : 'Taxímetro' }}</p>
+      <p class="label">{{ etiquetaViaje }}</p>
+      @if (gpsActivo) {
+        <span class="badge-gps">GPS</span>
+      }
       @if (esNocturno && (tarifa?.recargoNocturnoPct || 0) > 0) {
         <span class="badge-noche">{{ nocheTxt }}</span>
       }
@@ -31,26 +34,181 @@
     }
   </div>
 
-  <div class="card cotiza">
+  <div class="card cotiza" [class.panel-fill]="!hayViaje">
     <div class="sec-head">
-      <p class="label">Tramos · Maps</p>
+      <p class="label">{{
+        yendoPorCliente
+          ? 'GPS · vacío al cliente'
+          : conClienteABordo
+            ? 'GPS · con cliente'
+            : 'Tramos · Maps'
+      }}</p>
       @if (!hayViaje) {
         <p class="estimacion">{{ cotizacionTxt }}</p>
       }
     </div>
 
     @if (!hayViaje) {
-      <p class="check-title">Cotizar para</p>
+      <div class="casa-row">
+        <button type="button" class="btn btn-seco mini" (click)="marcarCasaAqui()">
+          {{ casaLista ? 'Casa (GPS)' : 'Marcar casa' }}
+        </button>
+        @if (casaLista) {
+          <span class="chip ok-casa">Casa lista · vacío auto</span>
+        }
+      </div>
+
       <div class="pct horario" role="group" aria-label="Horario del estimado">
         <button type="button" class="modo wide" [class.activo]="modoHorario === 'ahora'" (click)="setHorario('ahora')">Ahora</button>
         <button type="button" class="modo wide" [class.activo]="modoHorario === 'dia'" (click)="setHorario('dia')">Día</button>
         <button type="button" class="modo wide" [class.activo]="modoHorario === 'noche'" (click)="setHorario('noche')">Noche</button>
       </div>
-      @if (modoHorario === 'dia' || modoHorario === 'noche') {
-        <label class="campo" style="margin-top: 0.4rem">
-          Fecha y hora
-          <input type="datetime-local" [(ngModel)]="cuandoLocal" name="cuandoLocal" />
-        </label>
+    }
+
+    @if (!hayViaje && modoHorario === 'ahora') {
+      <div class="panel-ahora">
+        <div class="mini-card">
+          <p class="mini-title">Nota</p>
+          <input
+            type="text"
+            [(ngModel)]="paraCuando"
+            name="paraCuando"
+            placeholder="ej. Hacienda Santa Bárbara"
+            autocomplete="off"
+          />
+        </div>
+
+        <div class="mini-card">
+          <p class="mini-title">Con cliente</p>
+          <div class="tramo-row">
+            <label class="campo grow">
+              Km
+              <input type="number" inputmode="decimal" step="0.1" min="0" [(ngModel)]="kmCliente" (ngModelChange)="onKmChange()" name="kmCliente" placeholder="0" />
+            </label>
+            <label class="campo narrow">
+              Espera
+              <input type="number" inputmode="decimal" step="1" min="0" [(ngModel)]="minEsperaCotiza" (ngModelChange)="onKmChange()" name="espera" placeholder="min" />
+            </label>
+          </div>
+        </div>
+
+        <div class="mini-card">
+          <p class="mini-title">Vacíos</p>
+          <div class="tramo-row">
+            <label class="campo grow">
+              Ida (casa→cliente)
+              <input type="number" inputmode="decimal" step="0.1" min="0" [(ngModel)]="kmVacioIda" (ngModelChange)="onKmChange()" name="kmVacioIda" placeholder="km" />
+            </label>
+            <div class="pct" role="group" aria-label="Vacío ida">
+              <button type="button" class="modo" [class.activo]="modoVacioIda === 'nada'" (click)="setProporcion('vacioIda', 'nada')">0</button>
+              <button type="button" class="modo" [class.activo]="modoVacioIda === 'mitad'" (click)="setProporcion('vacioIda', 'mitad')">50</button>
+              <button type="button" class="modo" [class.activo]="modoVacioIda === 'completo'" (click)="setProporcion('vacioIda', 'completo')">100</button>
+            </div>
+          </div>
+          <div class="tramo-row">
+            <label class="campo grow">
+              Regreso (destino→casa)
+              <input type="number" inputmode="decimal" step="0.1" min="0" [(ngModel)]="kmVacioRegreso" (ngModelChange)="onKmChange()" name="kmVacioRegreso" placeholder="km" />
+            </label>
+            <div class="pct" role="group" aria-label="Vacío regreso">
+              <button type="button" class="modo" [class.activo]="modoVacioRegreso === 'nada'" (click)="setProporcion('vacioRegreso', 'nada')">0</button>
+              <button type="button" class="modo" [class.activo]="modoVacioRegreso === 'mitad'" (click)="setProporcion('vacioRegreso', 'mitad')">50</button>
+              <button type="button" class="modo" [class.activo]="modoVacioRegreso === 'completo'" (click)="setProporcion('vacioRegreso', 'completo')">100</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="mini-card">
+          <p class="mini-title">Caseta</p>
+          <div class="tramo-row">
+            <label class="campo grow">
+              Ida $
+              <input type="number" inputmode="decimal" step="1" min="0" [(ngModel)]="casetasIda" (ngModelChange)="onKmChange()" name="casetas" placeholder="0" />
+            </label>
+            <div class="pct" role="group" aria-label="Caseta regreso">
+              <button type="button" class="modo" [class.activo]="modoRegreso === 'nada'" (click)="setProporcion('caseta', 'nada')">0</button>
+              <button type="button" class="modo" [class.activo]="modoRegreso === 'mitad'" (click)="setProporcion('caseta', 'mitad')">50</button>
+              <button type="button" class="modo" [class.activo]="modoRegreso === 'completo'" (click)="setProporcion('caseta', 'completo')">100</button>
+            </div>
+          </div>
+        </div>
+
+        @if (desgloseKm || casetasTotal > 0) {
+          <div class="mini-card resumen">
+            <p class="chip">
+              @if (desgloseKm) { {{ desgloseKm }} }
+              @if (desgloseKm && casetasTotal > 0) { · }
+              @if (casetasTotal > 0) { {{ desgloseCasetas }} }
+            </p>
+          </div>
+        }
+      </div>
+    }
+
+    @if (hayViaje) {
+      <div class="tramos">
+        <div class="tramo-row">
+          <label class="campo grow">
+            Con cliente
+            <input type="number" inputmode="decimal" step="0.1" min="0" [(ngModel)]="kmCliente" (ngModelChange)="onKmChange()" name="kmCliente" placeholder="km" />
+          </label>
+        </div>
+
+        <div class="tramo-row">
+          <label class="campo grow">
+            Vacío ida
+            <input type="number" inputmode="decimal" step="0.1" min="0" [(ngModel)]="kmVacioIda" (ngModelChange)="onKmChange()" name="kmVacioIda" placeholder="km" />
+          </label>
+          <div class="pct" role="group" aria-label="Vacío ida">
+            <button type="button" class="modo" [class.activo]="modoVacioIda === 'nada'" (click)="setProporcion('vacioIda', 'nada')">0</button>
+            <button type="button" class="modo" [class.activo]="modoVacioIda === 'mitad'" (click)="setProporcion('vacioIda', 'mitad')">50</button>
+            <button type="button" class="modo" [class.activo]="modoVacioIda === 'completo'" (click)="setProporcion('vacioIda', 'completo')">100</button>
+          </div>
+        </div>
+
+        <div class="tramo-row">
+          <label class="campo grow">
+            Vacío regreso
+            <input type="number" inputmode="decimal" step="0.1" min="0" [(ngModel)]="kmVacioRegreso" (ngModelChange)="onKmChange()" name="kmVacioRegreso" placeholder="km" />
+          </label>
+          <div class="pct" role="group" aria-label="Vacío regreso">
+            <button type="button" class="modo" [class.activo]="modoVacioRegreso === 'nada'" (click)="setProporcion('vacioRegreso', 'nada')">0</button>
+            <button type="button" class="modo" [class.activo]="modoVacioRegreso === 'mitad'" (click)="setProporcion('vacioRegreso', 'mitad')">50</button>
+            <button type="button" class="modo" [class.activo]="modoVacioRegreso === 'completo'" (click)="setProporcion('vacioRegreso', 'completo')">100</button>
+          </div>
+        </div>
+
+        <div class="tramo-row">
+          <label class="campo grow">
+            Caseta $
+            <input type="number" inputmode="decimal" step="1" min="0" [(ngModel)]="casetasIda" (ngModelChange)="onKmChange()" name="casetas" placeholder="0" />
+          </label>
+          <div class="pct" role="group" aria-label="Caseta regreso">
+            <button type="button" class="modo" [class.activo]="modoRegreso === 'nada'" (click)="setProporcion('caseta', 'nada')">0</button>
+            <button type="button" class="modo" [class.activo]="modoRegreso === 'mitad'" (click)="setProporcion('caseta', 'mitad')">50</button>
+            <button type="button" class="modo" [class.activo]="modoRegreso === 'completo'" (click)="setProporcion('caseta', 'completo')">100</button>
+          </div>
+        </div>
+      </div>
+
+      @if (desgloseKm || casetasTotal > 0) {
+        <p class="chip">
+          @if (desgloseKm) { {{ desgloseKm }} }
+          @if (desgloseKm && casetasTotal > 0) { · }
+          @if (casetasTotal > 0) { {{ desgloseCasetas }} }
+        </p>
+      }
+    }
+
+    @if (!hayViaje && (modoHorario === 'dia' || modoHorario === 'noche')) {
+      <div class="cuando-viaje">
+        <app-fecha-hora-picker
+          name="cuandoLocal"
+          [(ngModel)]="cuandoLocal"
+          [franja]="franjaPicker"
+          [nocheDesde]="nocheDesdeHora"
+          [nocheHasta]="nocheHastaHora"
+        />
         <label class="campo">
           Cliente
           <input
@@ -61,91 +219,26 @@
             autocomplete="name"
           />
         </label>
-      }
-      <label class="campo" style="margin-top: 0.4rem">
-        Nota (opcional)
-        <input
-          type="text"
-          [(ngModel)]="paraCuando"
-          name="paraCuando"
-          placeholder="ej. salida del mercado"
-          autocomplete="off"
-        />
-      </label>
-    }
-
-    <div class="tramo-row">
-      <label class="campo grow">
-        Con cliente
-        <input type="number" inputmode="decimal" step="0.1" min="0" [(ngModel)]="kmCliente" (ngModelChange)="onKmChange()" name="kmCliente" placeholder="km" />
-      </label>
-      @if (!hayViaje) {
-        <label class="campo narrow">
-          Espera min
-          <input type="number" inputmode="decimal" step="1" min="0" [(ngModel)]="minEsperaCotiza" (ngModelChange)="onKmChange()" name="espera" placeholder="0" />
-        </label>
-      }
-    </div>
-
-    <div class="tramo-row">
-      <label class="campo grow">
-        Vacío casa→cliente
-        <input type="number" inputmode="decimal" step="0.1" min="0" [(ngModel)]="kmVacioIda" (ngModelChange)="onKmChange()" name="kmVacioIda" placeholder="0" />
-      </label>
-      <div class="pct" role="group" aria-label="Vacío ida">
-        <button type="button" class="modo" [class.activo]="modoVacioIda === 'nada'" (click)="setProporcion('vacioIda', 'nada')">0</button>
-        <button type="button" class="modo" [class.activo]="modoVacioIda === 'mitad'" (click)="setProporcion('vacioIda', 'mitad')">50</button>
-        <button type="button" class="modo" [class.activo]="modoVacioIda === 'completo'" (click)="setProporcion('vacioIda', 'completo')">100</button>
       </div>
-    </div>
-
-    <div class="tramo-row">
-      <label class="campo grow">
-        Vacío destino→casa
-        <input type="number" inputmode="decimal" step="0.1" min="0" [(ngModel)]="kmVacioRegreso" (ngModelChange)="onKmChange()" name="kmVacioRegreso" placeholder="0" />
-      </label>
-      <div class="pct" role="group" aria-label="Vacío regreso">
-        <button type="button" class="modo" [class.activo]="modoVacioRegreso === 'nada'" (click)="setProporcion('vacioRegreso', 'nada')">0</button>
-        <button type="button" class="modo" [class.activo]="modoVacioRegreso === 'mitad'" (click)="setProporcion('vacioRegreso', 'mitad')">50</button>
-        <button type="button" class="modo" [class.activo]="modoVacioRegreso === 'completo'" (click)="setProporcion('vacioRegreso', 'completo')">100</button>
-      </div>
-    </div>
-
-    @if (desgloseKm) {
-      <p class="chip">{{ desgloseKm }}</p>
-    }
-
-    <div class="divider"></div>
-
-    <div class="tramo-row">
-      <label class="campo grow">
-        Caseta ida $
-        <input type="number" inputmode="decimal" step="1" min="0" [(ngModel)]="casetasIda" (ngModelChange)="onKmChange()" name="casetas" placeholder="0" />
-      </label>
-      <div class="pct" role="group" aria-label="Caseta regreso">
-        <button type="button" class="modo" [class.activo]="modoRegreso === 'nada'" (click)="setProporcion('caseta', 'nada')">0</button>
-        <button type="button" class="modo" [class.activo]="modoRegreso === 'mitad'" (click)="setProporcion('caseta', 'mitad')">50</button>
-        <button type="button" class="modo" [class.activo]="modoRegreso === 'completo'" (click)="setProporcion('caseta', 'completo')">100</button>
-      </div>
-    </div>
-    @if (casetasTotal > 0) {
-      <p class="chip">{{ desgloseCasetas }} · {{ desgloseTotalCasetas }}</p>
     }
   </div>
 
   <div class="acciones">
     @if (!hayViaje) {
-      <div class="acciones-fila">
-        <button type="button" class="btn btn-seco" (click)="compartirEstimado()" [disabled]="kmCliente == null">
-          WhatsApp
-        </button>
-        <button type="button" class="btn btn-seco" (click)="irAReservar()" [disabled]="kmCliente == null">
-          Reservar
-        </button>
+      <div class="acciones-grid">
+        <button type="button" class="btn btn-seco" (click)="compartirEstimado()" [disabled]="kmCliente == null">WhatsApp</button>
+        <button type="button" class="btn btn-seco" (click)="irAReservar()" [disabled]="kmCliente == null">Reservar</button>
+        <button type="button" class="btn btn-seco grande" (click)="banderazo(false)" [disabled]="accionando">Voy por él</button>
+        <button type="button" class="btn btn-acento grande" (click)="banderazo(true)" [disabled]="accionando">Cliente aquí</button>
       </div>
-      <button type="button" class="btn btn-acento grande" (click)="banderazo()" [disabled]="accionando">Banderazo</button>
     } @else {
-      <button type="button" class="btn btn-ok grande" (click)="corte()" [disabled]="accionando">Corte</button>
+      @if (yendoPorCliente) {
+        <button type="button" class="btn btn-acento grande" (click)="recogiCliente()" [disabled]="accionando">
+          Recogí cliente
+        </button>
+      } @else {
+        <button type="button" class="btn btn-ok grande" (click)="corte()" [disabled]="accionando">Corte</button>
+      }
       <button type="button" class="btn btn-peligro" (click)="cancelar()" [disabled]="accionando">Cancelar</button>
     }
   </div>

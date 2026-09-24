@@ -91,8 +91,20 @@ function armarCobro(
     cobro *= 1 + n(tarifa.recargoNocturnoPct) / 100;
   }
   cobro = Math.max(cobro, n(tarifa.tarifaMinima));
-  cobro = Math.round(cobro);
+  cobro = redondearPago(cobro, tarifa.redondearPesos !== false);
   return { cobro, metros, duracionSegundos, segundosEspera, nocturno };
+}
+
+/**
+ * Redondea hacia arriba a número cerrado (múltiplos de $5) para facilitar el pago.
+ * Si redondearCerrado es false, solo sube al peso entero.
+ */
+export function redondearPago(monto: number, redondearCerrado = true): number {
+  const x = Math.max(0, Number(monto) || 0);
+  if (redondearCerrado) {
+    return Math.ceil(x / 5) * 5;
+  }
+  return Math.ceil(x);
 }
 
 export function esNoche(tarifa: Tarifa, instanteMs: number): boolean {
@@ -103,11 +115,60 @@ export function esNoche(tarifa: Tarifa, instanteMs: number): boolean {
       hourCycle: 'h23',
     }).format(new Date(instanteMs)),
   );
-  const desde = tarifa.nocheDesdeHora;
-  const hasta = tarifa.nocheHastaHora;
-  if (desde === hasta) return false;
-  if (desde < hasta) return hora >= desde && hora < hasta;
-  return hora >= desde || hora < hasta;
+  return esHoraNoche(hora, tarifa.nocheDesdeHora, tarifa.nocheHastaHora);
+}
+
+/** ¿La hora (0–23) cae en franja nocturna? Soporta rangos que cruzan medianoche. */
+export function esHoraNoche(hora: number, desde: number, hasta: number): boolean {
+  const h = ((Math.floor(hora) % 24) + 24) % 24;
+  const d = ((Math.floor(desde) % 24) + 24) % 24;
+  const t = ((Math.floor(hasta) % 24) + 24) % 24;
+  if (d === t) return false;
+  if (d < t) return h >= d && h < t;
+  return h >= d || h < t;
+}
+
+export function horasDeFranja(
+  franja: 'todas' | 'dia' | 'noche',
+  nocheDesde = 22,
+  nocheHasta = 6,
+): number[] {
+  const all = Array.from({ length: 24 }, (_, i) => i);
+  if (franja === 'todas') return all;
+  if (franja === 'noche') return all.filter((h) => esHoraNoche(h, nocheDesde, nocheHasta));
+  return all.filter((h) => !esHoraNoche(h, nocheDesde, nocheHasta));
+}
+
+/** Ajusta la hora al rango permitido (día o noche). */
+export function clampHoraFranja(
+  date: Date,
+  franja: 'todas' | 'dia' | 'noche',
+  nocheDesde = 22,
+  nocheHasta = 6,
+): Date {
+  if (franja === 'todas') return date;
+  const horas = horasDeFranja(franja, nocheDesde, nocheHasta);
+  if (!horas.length) return date;
+  const h = date.getHours();
+  if (horas.includes(h)) return date;
+  // Preferir la hora "central" de la franja
+  const preferida = franja === 'noche' ? nocheDesde : Math.floor((nocheHasta + nocheDesde) / 2) % 24;
+  const pick =
+    horas.find((x) => x >= preferida) ??
+    horas.reduce((best, x) => (Math.abs(x - h) < Math.abs(best - h) ? x : best), horas[0]);
+  const next = new Date(date);
+  next.setHours(pick, date.getMinutes(), 0, 0);
+  return next;
+}
+
+export function duracionLegible(segundos: number): string {
+  const s = Math.max(0, Math.floor(segundos));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const r = s % 60;
+  if (h > 0) return `${h} h ${m.toString().padStart(2, '0')} min`;
+  if (m > 0) return r > 0 ? `${m} min ${r.toString().padStart(2, '0')} s` : `${m} min`;
+  return `${r} s`;
 }
 
 export function dinero(nro: number, enteros = true): string {

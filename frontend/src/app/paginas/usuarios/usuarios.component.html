@@ -1,0 +1,46 @@
+<section class="usuarios">
+  <h1>Usuarios / taxis</h1>
+  @if (error) { <p class="error">{{ error }}</p> }
+  @if (ok) { <p class="ok">{{ ok }}</p> }
+
+  <form class="card form" (ngSubmit)="crear()">
+    <p class="label">Nuevo taxista</p>
+    <div class="dos">
+      <label>Usuario
+        <input [(ngModel)]="form.username" name="user" required autocomplete="off" />
+      </label>
+      <label>Nombre
+        <input [(ngModel)]="form.nombre" name="nom" placeholder="ej. Sonic 2" />
+      </label>
+    </div>
+    <div class="dos">
+      <label>Contraseña
+        <input type="password" [(ngModel)]="form.password" name="pass" required />
+      </label>
+      <label>Rol
+        <select [(ngModel)]="form.rol" name="rol">
+          <option value="TAXISTA">Taxista</option>
+          <option value="ADMIN">Admin</option>
+        </select>
+      </label>
+    </div>
+    <button type="submit" class="btn btn-acento" [disabled]="guardando">Crear</button>
+  </form>
+
+  <ul class="lista">
+    @for (u of lista; track u.id) {
+      <li class="card fila" [class.off]="!u.activo">
+        <div>
+          <strong>{{ u.nombre }}</strong>
+          <p class="muted">{{ u.username }} · {{ u.rol }}{{ u.activo ? '' : ' · off' }}</p>
+        </div>
+        <div class="der">
+          <button type="button" class="btn btn-seco mini" (click)="resetPass(u)">Clave</button>
+          <button type="button" class="btn mini" [class.btn-peligro]="u.activo" [class.btn-ok]="!u.activo" (click)="toggle(u)">
+            {{ u.activo ? 'Off' : 'On' }}
+          </button>
+        </div>
+      </li>
+    }
+  </ul>
+</section>

@@ -15,56 +15,61 @@ import org.springframework.web.server.ResponseStatusException;
 import com.taxi.dto.ReservaDto;
 import com.taxi.modelo.Reserva;
 import com.taxi.repositorio.ReservaRepository;
+import com.taxi.seguridad.AuthSupport;
 
 @Service
 public class ReservaService {
 
     private final ReservaRepository repo;
+    private final AuthSupport auth;
 
-    public ReservaService(ReservaRepository repo) {
+    public ReservaService(ReservaRepository repo, AuthSupport auth) {
         this.repo = repo;
+        this.auth = auth;
     }
 
-    /** Agenda: solo confirmadas. */
     public List<ReservaDto> proximas() {
+        Long uid = auth.actualId();
         Instant ahora = Instant.now().minus(Duration.ofHours(2));
-        return repo.findByEstadoAndCuandoGreaterThanEqualOrderByCuandoAsc(Reserva.Estado.RESERVADA, ahora)
+        return repo.findByUsuarioIdAndEstadoAndCuandoGreaterThanEqualOrderByCuandoAsc(
+                        uid, Reserva.Estado.RESERVADA, ahora)
                 .stream()
                 .map(this::conConflicto)
                 .toList();
     }
 
-    /** Cotizaciones pendientes de confirmar. */
     public List<ReservaDto> pendientes() {
+        Long uid = auth.actualId();
         Instant ahora = Instant.now().minus(Duration.ofHours(2));
-        return repo.findByEstadoAndCuandoGreaterThanEqualOrderByCuandoAsc(Reserva.Estado.PENDIENTE, ahora)
+        return repo.findByUsuarioIdAndEstadoAndCuandoGreaterThanEqualOrderByCuandoAsc(
+                        uid, Reserva.Estado.PENDIENTE, ahora)
                 .stream()
                 .map(this::conConflictoYPropuestas)
                 .toList();
     }
 
     public List<ReservaDto> recientes() {
-        return repo.findTop40ByOrderByCuandoDesc().stream().map(ReservaDto::de).toList();
+        return repo.findTop40ByUsuarioIdOrderByCuandoDesc(auth.actualId()).stream()
+                .map(ReservaDto::de)
+                .toList();
     }
 
     public List<ReservaDto> entre(Instant desde, Instant hasta) {
-        return repo.findByCuandoBetweenOrderByCuandoAsc(desde, hasta).stream()
+        return repo.findByUsuarioIdAndCuandoBetweenOrderByCuandoAsc(auth.actualId(), desde, hasta).stream()
                 .map(this::conConflicto)
                 .toList();
     }
 
-    /**
-     * ¿Hay otra reserva CONFIRMADA que se empalme?
-     * Las pendientes no bloquean la agenda.
-     */
     public boolean hayConflicto(Instant cuando, int minutosOcupados, Long excluirId) {
         if (cuando == null) {
             return false;
         }
+        Long uid = auth.actualId();
         int mins = Math.max(30, minutosOcupados);
         Instant ini = cuando.minus(Duration.ofMinutes(30));
         Instant fin = cuando.plus(Duration.ofMinutes(mins));
-        List<Reserva> cercanas = repo.findByEstadoAndCuandoBetweenOrderByCuandoAsc(
+        List<Reserva> cercanas = repo.findByUsuarioIdAndEstadoAndCuandoBetweenOrderByCuandoAsc(
+                uid,
                 Reserva.Estado.RESERVADA,
                 ini.minus(Duration.ofHours(3)),
                 fin.plus(Duration.ofHours(3)));
@@ -81,7 +86,6 @@ public class ReservaService {
         return false;
     }
 
-    /** Hasta 4 horarios libres cercanos para ofrecerle al cliente. */
     public List<Instant> proponerHorarios(Instant cuando, int minutosOcupados, Long excluirId) {
         List<Instant> out = new ArrayList<>();
         if (cuando == null) {
@@ -100,7 +104,6 @@ public class ReservaService {
                 break;
             }
         }
-        // Si sigue vacío, busca huecos cada hora hacia adelante
         Instant cursor = cuando.plus(Duration.ofHours(1));
         for (int i = 0; i < 48 && out.size() < 4; i++) {
             if (!hayConflicto(cursor, minutosOcupados, excluirId) && !out.contains(cursor)) {
@@ -119,7 +122,6 @@ public class ReservaService {
                 : Reserva.Estado.PENDIENTE;
         int mins = dto.minutosOcupados > 0 ? dto.minutosOcupados : estimarMinutos(dto.kmEstimado);
 
-        // Agenda confirmada: no guardar si choca; devolver propuestas
         if (estado == Reserva.Estado.RESERVADA && hayConflicto(dto.cuando, mins, null)) {
             ReservaDto out = new ReservaDto();
             out.cuando = dto.cuando;
@@ -133,6 +135,7 @@ public class ReservaService {
 
         Reserva r = new Reserva();
         aplicar(r, dto);
+        r.setUsuarioId(auth.actualId());
         r.setEstado(estado);
         r.setCreadaEn(Instant.now());
         return enriquecer(repo.save(r));
@@ -149,11 +152,6 @@ public class ReservaService {
         return enriquecer(repo.save(r));
     }
 
-    /**
-     * Confirma pendiente → agenda.
-     * Si el horario está ocupado y no mandan otro, no confirma: regresa propuestas.
-     * Si mandan {@code nuevoCuando}, lo aplica y confirma si queda libre.
-     */
     @Transactional
     public ReservaDto confirmar(Long id, Instant nuevoCuando) {
         Reserva r = obtener(id);
@@ -244,7 +242,7 @@ public class ReservaService {
     }
 
     private Reserva obtener(Long id) {
-        return repo.findById(id)
+        return repo.findByIdAndUsuarioId(id, auth.actualId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reserva no encontrada"));
     }
 

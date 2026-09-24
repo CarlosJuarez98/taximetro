@@ -3,9 +3,10 @@ import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { Subscription } from 'rxjs';
 import { ApiService } from '../../api.service';
-import { HUAMANTLA, RESERVA_BORRADOR_KEY, ReservaBorrador, Tarifa, Viaje } from '../../modelos';
-import { calcularCobroPorKm, dinero, esNoche, mmss } from '../../cobro.util';
-import { compartirWhatsappTarjeta } from '../../whatsapp.util';
+import { FechaHoraPickerComponent } from '../../fecha-hora-picker/fecha-hora-picker.component';
+import { HUAMANTLA, CASA_KEY, CasaGps, RESERVA_BORRADOR_KEY, ReservaBorrador, Tarifa, Viaje } from '../../modelos';
+import { calcularCobroPorKm, clampHoraFranja, dinero, duracionLegible, esNoche, haversineMetros, mmss, redondearPago } from '../../cobro.util';
+import { compartirWhatsappTarjeta, sloganAleatorio } from '../../whatsapp.util';
 
 type MotivoEspera = 'cliente' | 'trafico';
 type Proporcion = 'nada' | 'mitad' | 'completo';
@@ -15,7 +16,7 @@ type ModoHorario = 'ahora' | 'dia' | 'noche';
 @Component({
   selector: 'app-viaje',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, FechaHoraPickerComponent],
   templateUrl: './viaje.component.html',
   styleUrl: './viaje.component.css',
 })
@@ -29,7 +30,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
   enCurso: Viaje | null = null;
   recibo: Viaje | null = null;
 
-  /** Km con el cliente a bordo (puede ser varios destinos sumados). */
+  /** Km con el cliente a bordo (GPS en vivo o Maps). */
   kmCliente: number | null = null;
   /** Casa → punto de recogida (vas vacío). */
   kmVacioIda = 0;
@@ -56,17 +57,49 @@ export class ViajeComponent implements OnInit, OnDestroy {
   segundos = 0;
   /** Texto del último desglose (recibo / WhatsApp). */
   ultimoDesglose = '';
+  /** GPS midiendo km en vivo. */
+  gpsActivo = false;
+  /** Ya hay casa guardada (para vacío automático). */
+  casaLista = false;
+  /**
+   * vacio = saliste de base / vas por el cliente (GPS → vacío ida).
+   * con_cliente = ya lo subiste (GPS → km cobrables con él).
+   */
+  faseViaje: 'vacio' | 'con_cliente' = 'vacio';
 
   esperaMotivo: MotivoEspera | null = null;
   private esperaAcumuladaSeg = 0;
   private esperaInicioMs = 0;
 
   private tick?: number;
+  private gpsWatchId?: number;
+  private metrosGps = 0;
+  private lastLat: number | null = null;
+  private lastLng: number | null = null;
+  private puntosPendientes: { lat: number; lng: number; t: string }[] = [];
+  private flushTimer?: number;
   private subs = new Subscription();
   private inicioMs = 0;
 
   get hayViaje(): boolean {
     return this.enCurso?.estado === 'EN_CURSO';
+  }
+
+  /** Vas de la base al cliente (aún no sube). */
+  get yendoPorCliente(): boolean {
+    return this.hayViaje && this.faseViaje === 'vacio';
+  }
+
+  /** Cliente a bordo. */
+  get conClienteABordo(): boolean {
+    return this.hayViaje && this.faseViaje === 'con_cliente';
+  }
+
+  get etiquetaViaje(): string {
+    if (!this.hayViaje) return 'Taxímetro';
+    if (this.esperando) return this.motivoEsperaTxt;
+    if (this.yendoPorCliente) return 'Por el cliente';
+    return 'Con cliente';
   }
 
   get esNocturno(): boolean {
@@ -140,7 +173,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
       Date.now(),
       this.forzarNocheCotiza,
     );
-    return dinero(r.cobro + this.casetasTotal);
+    return dinero(this.totalPago(r.cobro));
   }
 
   get desgloseKm(): string {
@@ -184,11 +217,25 @@ export class ViajeComponent implements OnInit, OnDestroy {
   }
 
   get tiempoRecibo(): string {
-    return mmss(this.recibo?.duracionSegundos || 0);
+    return duracionLegible(this.recibo?.duracionSegundos || 0);
   }
 
   get esperaRecibo(): string {
     return mmss(this.recibo?.segundosEspera || 0);
+  }
+
+  get franjaPicker(): 'dia' | 'noche' | 'todas' {
+    if (this.modoHorario === 'dia') return 'dia';
+    if (this.modoHorario === 'noche') return 'noche';
+    return 'todas';
+  }
+
+  get nocheDesdeHora(): number {
+    return this.tarifa?.nocheDesdeHora ?? 22;
+  }
+
+  get nocheHastaHora(): number {
+    return this.tarifa?.nocheHastaHora ?? 6;
   }
 
   get motivoEsperaTxt(): string {
@@ -211,6 +258,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.casaLista = !!this.leerCasaRaw();
     this.subs.add(
       this.api.tarifa().subscribe({
         next: (t) => {
@@ -229,9 +277,25 @@ export class ViajeComponent implements OnInit, OnDestroy {
     );
   }
 
+  marcarCasaAqui(): void {
+    this.error = '';
+    this.okMsg = '';
+    void this.leerUbicacion().then((pos) => {
+      if (!pos.gps) {
+        this.error = 'Activa el GPS para marcar tu casa.';
+        return;
+      }
+      const casa: CasaGps = { lat: pos.lat, lng: pos.lng };
+      localStorage.setItem(CASA_KEY, JSON.stringify(casa));
+      this.casaLista = true;
+      this.okMsg = 'Casa guardada. Al cortar se calcula el vacío de regreso.';
+    });
+  }
+
   ngOnDestroy(): void {
     this.subs.unsubscribe();
     this.limpiarTick();
+    this.detenerGps();
   }
 
   onKmChange(): void {
@@ -247,7 +311,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
 
   setHorario(modo: ModoHorario): void {
     this.modoHorario = modo;
-    if ((modo === 'dia' || modo === 'noche') && !this.cuandoLocal) {
+    if (modo === 'dia' || modo === 'noche') {
       this.cuandoLocal = this.defaultLocalDatetime(modo === 'noche');
     }
     this.recalcularVivo();
@@ -259,13 +323,12 @@ export class ViajeComponent implements OnInit, OnDestroy {
       return;
     }
     this.error = '';
-    const cuando = (this.paraCuando || '').trim() || this.horarioCotizaTxt;
-    const detalle = `${this.kmCobrables.toFixed(1)} km`;
+    const nota = (this.paraCuando || '').trim();
     void compartirWhatsappTarjeta({
       tipo: 'estimado',
       totalTxt: this.cotizacionTxt,
-      cuando,
-      detalle,
+      nota: nota || undefined,
+      slogan: sloganAleatorio(),
     }).catch(() => {
       this.error = 'No se pudo armar el mensaje.';
     });
@@ -285,7 +348,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
       Date.now(),
       this.forzarNocheCotiza,
     );
-    const cobro = r.cobro + this.casetasTotal;
+    const cobro = this.totalPago(r.cobro);
 
     // Día / noche → queda como pendiente; confirmar después en Agenda
     if (this.modoHorario === 'dia' || this.modoHorario === 'noche') {
@@ -362,9 +425,13 @@ export class ViajeComponent implements OnInit, OnDestroy {
     const d = new Date();
     d.setMinutes(0, 0, 0);
     d.setDate(d.getDate() + 1);
-    d.setHours(noche ? 22 : 10, 0, 0, 0);
+    const desde = this.tarifa?.nocheDesdeHora ?? 22;
+    const hasta = this.tarifa?.nocheHastaHora ?? 6;
+    // Día: media mañana; noche: inicio de franja nocturna
+    d.setHours(noche ? desde : Math.min(10, (hasta + 4) % 24 || 10), 0, 0, 0);
+    const clamped = clampHoraFranja(d, noche ? 'noche' : 'dia', desde, hasta);
     const pad = (n: number) => n.toString().padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    return `${clamped.getFullYear()}-${pad(clamped.getMonth() + 1)}-${pad(clamped.getDate())}T${pad(clamped.getHours())}:${pad(clamped.getMinutes())}`;
   }
 
   toggleEspera(motivo: MotivoEspera): void {
@@ -388,67 +455,131 @@ export class ViajeComponent implements OnInit, OnDestroy {
     this.recalcularVivo();
   }
 
-  banderazo(): void {
+  /** @param clienteAqui true = sube donde estás (sin vacío ida). false = sales de base por él. */
+  banderazo(clienteAqui = false): void {
     if (this.accionando) return;
     this.accionando = true;
     this.error = '';
+    this.okMsg = '';
     this.recibo = null;
     this.ultimoDesglose = '';
     this.esperaAcumuladaSeg = Math.round(Math.max(0, Number(this.minEsperaCotiza) || 0) * 60);
     this.esperaMotivo = null;
     this.esperaInicioMs = 0;
-    this.api
-      .iniciar({
-        origenLat: HUAMANTLA.lat,
-        origenLng: HUAMANTLA.lng,
-        origenTexto: 'Viaja en el Rojo',
+    this.metrosGps = 0;
+    this.lastLat = null;
+    this.lastLng = null;
+    this.kmCliente = 0;
+    this.kmVacioIda = 0;
+    this.kmVacioRegreso = 0;
+    this.faseViaje = clienteAqui ? 'con_cliente' : 'vacio';
+
+    void this.leerUbicacion()
+      .then((pos) => {
+        this.api
+          .iniciar({
+            origenLat: pos.lat,
+            origenLng: pos.lng,
+            origenTexto: pos.gps ? 'GPS' : 'Viaja en el Rojo',
+          })
+          .subscribe({
+            next: (v) => {
+              this.accionando = false;
+              this.enCurso = v;
+              this.inicioMs = Date.now();
+              this.segundos = 0;
+              this.lastLat = pos.lat;
+              this.lastLng = pos.lng;
+              this.recalcularVivo();
+              this.iniciarTick();
+              if (pos.gps) {
+                this.iniciarGps();
+                this.okMsg = clienteAqui
+                  ? 'Cliente a bordo. GPS contando. Corte cuando diga “aquí”.'
+                  : 'Vas por el cliente. Cuando lo subas toca “Recogí cliente”.';
+              } else {
+                this.gpsActivo = false;
+                this.error = 'Sin GPS: pon los km a mano o activa la ubicación.';
+              }
+            },
+            error: (e) => {
+              this.accionando = false;
+              this.error = e?.error?.error || 'No se pudo dar banderazo.';
+            },
+          });
       })
-      .subscribe({
-        next: (v) => {
-          this.accionando = false;
-          this.enCurso = v;
-          this.inicioMs = Date.now();
-          this.segundos = 0;
-          this.recalcularVivo();
-          this.iniciarTick();
-        },
-        error: (e) => {
-          this.accionando = false;
-          this.error = e?.error?.error || 'No se pudo dar banderazo.';
-        },
+      .catch(() => {
+        this.accionando = false;
+        this.error = 'Activa la ubicación del teléfono para el taxímetro.';
       });
+  }
+
+  /** Marca que el cliente ya subió: cierra vacío ida y empieza km con él. */
+  recogiCliente(): void {
+    if (!this.hayViaje || this.faseViaje === 'con_cliente') return;
+    this.pausarEspera();
+    this.kmVacioIda = Math.round((this.metrosGps / 1000) * 100) / 100;
+    this.metrosGps = 0;
+    this.kmCliente = 0;
+    this.faseViaje = 'con_cliente';
+    this.error = '';
+    this.okMsg =
+      this.kmVacioIda > 0
+        ? `Vacío ida ${this.kmVacioIda.toFixed(1)} km. Ahora cobra con el cliente.`
+        : 'Cliente a bordo. El GPS cuenta el viaje.';
+    this.recalcularVivo();
   }
 
   corte(): void {
     if (!this.enCurso || this.accionando) return;
+    if (this.faseViaje === 'vacio') {
+      this.error = 'Primero marca “Recogí cliente” (o cancela si no lo encontraste).';
+      return;
+    }
     if (this.kmCliente == null || this.kmCliente < 0) {
-      this.error = 'Pon los km con el cliente (Maps) antes de cortar.';
+      this.error = 'Aún no hay km. Espera al GPS o ponlos a mano.';
       return;
     }
     this.pausarEspera();
+    this.enviarPuntosPendientes();
+    this.detenerGps();
     this.accionando = true;
     this.error = '';
-    this.ultimoDesglose = this.armarDesgloseTexto();
-    const minEspera = Math.round((this.esperaSegundos / 60) * 100) / 100;
-    this.api.corte(this.enCurso.id, [], this.kmCobrables, minEspera, this.casetasTotal).subscribe({
-      next: (v) => {
-        this.accionando = false;
-        this.recibo = v;
-        this.cobroVivo = Number(v.cobro);
-        this.segundos = v.duracionSegundos;
-        this.enCurso = null;
-        this.limpiarTick();
-      },
-      error: (e) => {
-        this.accionando = false;
-        this.error = e?.error?.error || 'No se pudo cortar el viaje.';
-      },
+    this.okMsg = '';
+
+    void this.leerUbicacion().then((pos) => {
+      // Vacío regreso: de “déjame acá” hasta casa
+      if (pos.gps) {
+        this.lastLat = pos.lat;
+        this.lastLng = pos.lng;
+        this.kmVacioRegreso = this.kmHastaCasa(pos.lat, pos.lng);
+      } else if (this.lastLat != null && this.lastLng != null) {
+        this.kmVacioRegreso = this.kmHastaCasa(this.lastLat, this.lastLng);
+      }
+      this.ultimoDesglose = this.armarDesgloseTexto();
+      const minEspera = Math.round((this.esperaSegundos / 60) * 100) / 100;
+      this.api.corte(this.enCurso!.id, [], this.kmCobrables, minEspera, this.casetasTotal).subscribe({
+        next: (v) => {
+          this.accionando = false;
+          this.recibo = v;
+          this.cobroVivo = Number(v.cobro);
+          this.segundos = v.duracionSegundos;
+          this.enCurso = null;
+          this.faseViaje = 'vacio';
+          this.limpiarTick();
+        },
+        error: (e) => {
+          this.accionando = false;
+          this.error = e?.error?.error || 'No se pudo cortar el viaje.';
+        },
+      });
     });
   }
 
   cancelar(): void {
     if (!this.enCurso || this.accionando) return;
     this.pausarEspera();
+    this.detenerGps();
     this.accionando = true;
     this.api.cancelar(this.enCurso.id).subscribe({
       next: () => {
@@ -457,6 +588,9 @@ export class ViajeComponent implements OnInit, OnDestroy {
         this.cobroVivo = 0;
         this.segundos = 0;
         this.esperaAcumuladaSeg = 0;
+        this.metrosGps = 0;
+        this.faseViaje = 'vacio';
+        this.okMsg = '';
         this.limpiarTick();
       },
       error: (e) => {
@@ -472,12 +606,11 @@ export class ViajeComponent implements OnInit, OnDestroy {
 
   compartirWhatsapp(): void {
     if (!this.recibo) return;
-    const v = this.recibo;
-    const km = (Number(v.distanciaMetros) / 1000).toFixed(1);
     void compartirWhatsappTarjeta({
       tipo: 'recibo',
-      totalTxt: dinero(Number(v.cobro)),
-      detalle: `${km} km · ${mmss(v.duracionSegundos)}`,
+      totalTxt: dinero(Number(this.recibo.cobro)),
+      duracionTxt: duracionLegible(this.recibo.duracionSegundos || 0),
+      slogan: sloganAleatorio(),
     }).catch(() => {
       this.error = 'No se pudo armar el recibo.';
     });
@@ -505,12 +638,20 @@ export class ViajeComponent implements OnInit, OnDestroy {
     this.enCurso = v;
     this.inicioMs = Date.parse(v.inicio);
     this.segundos = Math.max(0, Math.floor((Date.now() - this.inicioMs) / 1000));
+    // Al reabrir, asumimos ya con cliente si había distancia
     if (v.distanciaMetros != null && Number(v.distanciaMetros) > 0) {
+      this.faseViaje = 'con_cliente';
       this.kmCliente = Number(v.distanciaMetros) / 1000;
+      this.metrosGps = Number(v.distanciaMetros);
+    } else {
+      this.faseViaje = 'vacio';
+      this.kmCliente = 0;
+      this.metrosGps = 0;
     }
     this.esperaAcumuladaSeg = v.segundosEspera || 0;
     this.recalcularVivo();
     this.iniciarTick();
+    this.iniciarGps();
   }
 
   private recalcularVivo(): void {
@@ -519,7 +660,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
       return;
     }
     if (!this.hayViaje && (this.kmCliente == null || this.kmCliente < 0)) {
-      this.cobroVivo = this.casetasTotal;
+      this.cobroVivo = this.totalPago(0);
       return;
     }
     const km = this.kmCliente == null || this.kmCliente < 0 ? 0 : this.kmCobrables;
@@ -531,7 +672,13 @@ export class ViajeComponent implements OnInit, OnDestroy {
       this.inicioMs || Date.now(),
       forzar,
     );
-    this.cobroVivo = r.cobro + this.casetasTotal;
+    this.cobroVivo = this.totalPago(r.cobro);
+  }
+
+  /** Total a cobrar: km + casetas, redondeado arriba a $5. */
+  private totalPago(cobroBase: number): number {
+    const cerrado = this.tarifa?.redondearPesos !== false;
+    return redondearPago(cobroBase + this.casetasTotal, cerrado);
   }
 
   private iniciarTick(): void {
@@ -547,5 +694,109 @@ export class ViajeComponent implements OnInit, OnDestroy {
       window.clearInterval(this.tick);
       this.tick = undefined;
     }
+  }
+
+  private leerUbicacion(): Promise<{ lat: number; lng: number; gps: boolean }> {
+    if (!navigator.geolocation) {
+      return Promise.resolve({ lat: HUAMANTLA.lat, lng: HUAMANTLA.lng, gps: false });
+    }
+    return new Promise((resolve) => {
+      navigator.geolocation.getCurrentPosition(
+        (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude, gps: true }),
+        () => resolve({ lat: HUAMANTLA.lat, lng: HUAMANTLA.lng, gps: false }),
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 5000 },
+      );
+    });
+  }
+
+  /** Km estimados por calle hasta casa (~línea recta × 1.3). */
+  private kmHastaCasa(lat: number, lng: number): number {
+    const casa = this.coordsCasa();
+    const metros = haversineMetros(lat, lng, casa.lat, casa.lng);
+    return Math.round((metros / 1000) * 1.3 * 10) / 10;
+  }
+
+  private coordsCasa(): CasaGps {
+    return this.leerCasaRaw() || { lat: HUAMANTLA.lat, lng: HUAMANTLA.lng };
+  }
+
+  private leerCasaRaw(): CasaGps | null {
+    try {
+      const raw = localStorage.getItem(CASA_KEY);
+      if (!raw) return null;
+      const c = JSON.parse(raw) as CasaGps;
+      if (typeof c.lat === 'number' && typeof c.lng === 'number') return c;
+    } catch {
+      /* ignore */
+    }
+    return null;
+  }
+
+  private iniciarGps(): void {
+    this.detenerGps();
+    if (!navigator.geolocation) {
+      this.gpsActivo = false;
+      return;
+    }
+    this.gpsActivo = true;
+    this.gpsWatchId = navigator.geolocation.watchPosition(
+      (p) => this.onGps(p),
+      () => {
+        this.gpsActivo = false;
+      },
+      { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 },
+    );
+    this.flushTimer = window.setInterval(() => this.enviarPuntosPendientes(), 12000);
+  }
+
+  private detenerGps(): void {
+    if (this.gpsWatchId != null) {
+      navigator.geolocation.clearWatch(this.gpsWatchId);
+      this.gpsWatchId = undefined;
+    }
+    if (this.flushTimer) {
+      window.clearInterval(this.flushTimer);
+      this.flushTimer = undefined;
+    }
+    this.gpsActivo = false;
+  }
+
+  private onGps(p: GeolocationPosition): void {
+    if (!this.hayViaje) return;
+    const acc = p.coords.accuracy ?? 99;
+    if (acc > 45) return;
+    const lat = p.coords.latitude;
+    const lng = p.coords.longitude;
+    const t = new Date(p.timestamp || Date.now()).toISOString();
+
+    if (this.lastLat != null && this.lastLng != null) {
+      const d = haversineMetros(this.lastLat, this.lastLng, lat, lng);
+      if (d >= 8 && d < 180) {
+        this.metrosGps += d;
+        const km = Math.round((this.metrosGps / 1000) * 100) / 100;
+        if (this.faseViaje === 'vacio') {
+          this.kmVacioIda = km;
+        } else {
+          this.kmCliente = km;
+        }
+        this.recalcularVivo();
+      } else if (d < 8) {
+        return;
+      }
+      // d >= 180: glitch, solo actualiza ancla
+    }
+
+    this.lastLat = lat;
+    this.lastLng = lng;
+    this.puntosPendientes.push({ lat, lng, t });
+    if (this.puntosPendientes.length >= 8) {
+      this.enviarPuntosPendientes();
+    }
+  }
+
+  private enviarPuntosPendientes(): void {
+    if (!this.enCurso?.id || !this.puntosPendientes.length) return;
+    const lote = this.puntosPendientes.splice(0, this.puntosPendientes.length);
+    this.api.puntos(this.enCurso.id, lote).subscribe({ error: () => {} });
   }
 }

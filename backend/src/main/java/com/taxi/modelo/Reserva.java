@@ -59,11 +59,14 @@ public class Reserva {
     private String notas;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 20, columnDefinition = "VARCHAR(20)")
     private Estado estado = Estado.RESERVADA;
 
     @Column(nullable = false)
     private Instant creadaEn = Instant.now();
+
+    @Column(name = "usuario_id")
+    private Long usuarioId;
 
     public Long getId() {
         return id;
@@ -167,5 +170,13 @@ public class Reserva {
 
     public void setCreadaEn(Instant creadaEn) {
         this.creadaEn = creadaEn;
+    }
+
+    public Long getUsuarioId() {
+        return usuarioId;
+    }
+
+    public void setUsuarioId(Long usuarioId) {
+        this.usuarioId = usuarioId;
     }
 }

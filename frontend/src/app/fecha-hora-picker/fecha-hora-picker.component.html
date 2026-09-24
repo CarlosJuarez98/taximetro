@@ -1,0 +1,95 @@
+<div class="fhp" [class.compact]="compact()" [class.disabled]="disabled">
+  <div class="hero" [class.pop]="popped" aria-live="polite">
+    <div class="hero-date">
+      <span class="semana">{{ displaySemana }}</span>
+      <strong class="dia">{{ displayDia }}</strong>
+      <span class="mes">{{ displayMes }}</span>
+    </div>
+    <div class="hero-time">
+      <span class="reloj-ring" aria-hidden="true"></span>
+      <strong class="hora">{{ displayHora }}</strong>
+    </div>
+  </div>
+
+  <div class="rapidos" role="group" aria-label="Atajos">
+    <button type="button" class="chip" (click)="rapido(0)" [disabled]="disabled">Hoy</button>
+    <button type="button" class="chip" (click)="rapido(1)" [disabled]="disabled">Mañana</button>
+    <button type="button" class="chip" (click)="rapido(2)" [disabled]="disabled">+2 días</button>
+  </div>
+
+  <div class="cal-week">
+    <div class="cal-nav">
+      <button type="button" class="nav-btn" (click)="semanaAnterior()" [disabled]="disabled" aria-label="Semana anterior">‹</button>
+      <span class="cal-titulo">
+        @for (_ of [weekKey]; track weekKey) {
+          <span class="cal-titulo-in">{{ semanaTitulo }}</span>
+        }
+      </span>
+      <button type="button" class="nav-btn" (click)="semanaSiguiente()" [disabled]="disabled" aria-label="Semana siguiente">›</button>
+    </div>
+
+    <div class="weekdays">
+      @for (d of semanaLbl; track d) {
+        <span>{{ d }}</span>
+      }
+    </div>
+
+    @for (_ of [weekKey]; track weekKey) {
+      <div class="week-row" [class.slide-izq]="weekDir === 'izq'" [class.slide-der]="weekDir === 'der'">
+        @for (d of diasSemana; track $index) {
+          <button
+            type="button"
+            class="day"
+            [class.hoy]="esHoy(d)"
+            [class.sel]="esSel(d)"
+            [class.pasado]="esPasado(d)"
+            [disabled]="disabled || esPasado(d)"
+            (click)="elegirDia(d)"
+          >
+            <span>{{ d.getDate() }}</span>
+          </button>
+        }
+      </div>
+    }
+  </div>
+
+  <div class="time">
+    @if (franjaHint) {
+      <p class="time-label hint">{{ franjaHint }}</p>
+    }
+    <div class="time-block">
+      <p class="time-label">Hora</p>
+      <div class="horas" #horasStrip role="listbox" aria-label="Hora">
+        @for (h of horas; track h) {
+          <button
+            type="button"
+            class="h-btn"
+            role="option"
+            [class.activo]="seleccionado.getHours() === h"
+            [attr.aria-selected]="seleccionado.getHours() === h"
+            [disabled]="disabled"
+            (click)="setHora(h)"
+          >
+            {{ h.toString().padStart(2, '0') }}
+          </button>
+        }
+      </div>
+    </div>
+    <div class="time-block">
+      <p class="time-label">Min</p>
+      <div class="mins" role="group" aria-label="Minutos">
+        @for (m of minutos; track m) {
+          <button
+            type="button"
+            class="m-btn"
+            [class.activo]="seleccionado.getMinutes() === m"
+            [disabled]="disabled"
+            (click)="setMinuto(m)"
+          >
+            :{{ m.toString().padStart(2, '0') }}
+          </button>
+        }
+      </div>
+    </div>
+  </div>
+</div>

@@ -10,8 +10,10 @@
 .top {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
   flex: 0 0 auto;
-  padding: calc(0.4rem + var(--safe-top)) 0.7rem 0.4rem;
+  padding: calc(0.28rem + var(--safe-top)) 0.55rem 0.28rem;
   border-bottom: 1px solid color-mix(in srgb, var(--rojo) 35%, transparent);
   background: color-mix(in srgb, #070708 92%, transparent);
   backdrop-filter: blur(16px);
@@ -20,32 +22,44 @@
   z-index: 30;
 }
 
+.btn-salir {
+  flex: 0 0 auto;
+  border: 1px solid var(--linea);
+  background: transparent;
+  color: var(--texto-suave);
+  border-radius: 0.45rem;
+  padding: 0.28rem 0.45rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 2rem;
+}
+
 .brand {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.45rem;
   min-width: 0;
 }
 
 .logo-ring {
   position: relative;
   flex: 0 0 auto;
-  width: 52px;
-  height: 52px;
-  border-radius: 14px;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
   padding: 2px;
   background: linear-gradient(135deg, #ff7a85, var(--rojo), #7a0010);
   box-shadow:
     0 0 0 1px rgba(255, 30, 50, 0.35),
-    0 0 24px var(--rojo-glow),
-    0 8px 16px rgba(0, 0, 0, 0.45);
-  animation: logoPulse 2.8s ease-in-out infinite;
+    0 0 18px var(--rojo-glow),
+    0 6px 12px rgba(0, 0, 0, 0.45);
 }
 
 .brand-logo {
   width: 100%;
   height: 100%;
-  border-radius: 12px;
+  border-radius: 9px;
   object-fit: cover;
   display: block;
   background: #0a0a0c;
@@ -59,9 +73,9 @@
   margin: 0;
   font-family: Oswald, sans-serif;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  font-size: clamp(0.92rem, 4.2vw, 1.05rem);
+  font-size: clamp(0.82rem, 3.8vw, 0.95rem);
   line-height: 1.05;
   color: #fff;
   text-shadow: 0 0 18px rgba(255, 30, 50, 0.55);
@@ -71,32 +85,59 @@
 }
 
 .brand-sub {
-  margin: 0.15rem 0 0;
+  margin: 0.05rem 0 0;
   color: var(--texto-suave);
-  font-size: 0.68rem;
-  letter-spacing: 0.06em;
+  font-size: 0.6rem;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
   font-weight: 700;
 }
 
 main {
-  flex: 1 0 auto;
+  flex: 1 1 auto;
   width: 100%;
   max-width: 100%;
-  padding: 0.5rem 0.6rem 0.85rem;
-  /* Sin overflow propio: scrollea el body (móvil OK) */
-  overflow: visible;
+  min-height: 0;
+  padding: 0.28rem 0.4rem calc(0.45rem + var(--dock-h) + var(--safe-bottom));
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+main.fit {
+  overflow: hidden;
+  padding-bottom: calc(0.28rem + var(--dock-h) + var(--safe-bottom));
+}
+
+.shell.fit-viaje {
+  height: 100dvh;
+  height: 100svh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
+.shell.fit-viaje main.fit {
+  display: flex;
+  flex-direction: column;
+}
+
+.shell.fit-viaje main.fit > * {
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .nav-dock {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
   gap: 0.2rem;
   flex: 0 0 auto;
-  padding: 0.3rem 0.35rem calc(0.35rem + var(--safe-bottom));
+  padding: 0.25rem 0.3rem calc(0.25rem + var(--safe-bottom));
   border-top: 1px solid var(--linea);
   background: color-mix(in srgb, #0c0a0d 96%, var(--rojo));
-  position: sticky;
+  position: fixed;
+  left: 0;
+  right: 0;
   bottom: 0;
   z-index: 40;
 }
@@ -106,40 +147,92 @@ main {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.08rem;
-  min-height: var(--touch);
-  padding: 0.3rem 0.1rem;
-  border-radius: 0.65rem;
+  gap: 0.05rem;
+  min-height: 2.7rem;
+  min-width: 0;
+  padding: 0.22rem 0.1rem;
+  border-radius: 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--linea) 90%, #fff 8%);
+  background: color-mix(in srgb, var(--superficie-2) 88%, transparent);
   color: var(--texto-suave);
   text-decoration: none;
-  font-weight: 700;
-  font-size: 0.7rem;
+  font-weight: 800;
+  font-size: 0.58rem;
+  letter-spacing: 0.02em;
   user-select: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition: transform 0.12s var(--ease-out), background 0.15s, border-color 0.15s, color 0.15s, box-shadow 0.15s;
+}
+
+.nav-dock a:active {
+  transform: scale(0.96);
 }
 
 .nav-dock a.activo {
   color: #fff;
+  border-color: transparent;
   background: linear-gradient(135deg, #ff5a67, var(--rojo));
-  box-shadow: 0 6px 16px var(--rojo-glow);
+  box-shadow: 0 4px 12px var(--rojo-glow);
 }
 
-.dock-ico { font-size: 0.95rem; }
-
-@keyframes logoPulse {
-  0%, 100% { box-shadow: 0 0 0 1px rgba(255, 30, 50, 0.35), 0 0 18px rgba(255, 30, 50, 0.35), 0 8px 16px rgba(0,0,0,.45); }
-  50% { box-shadow: 0 0 0 1px rgba(255, 30, 50, 0.55), 0 0 30px rgba(255, 30, 50, 0.55), 0 8px 16px rgba(0,0,0,.45); }
+.dock-ico { font-size: 0.9rem; line-height: 1; }
+.dock-lbl {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 0.1rem;
 }
 
 @media (min-width: 900px) {
   .logo-ring {
-    width: 58px;
-    height: 58px;
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    animation: logoPulse 2.8s ease-in-out infinite;
   }
 
+  .brand-logo { border-radius: 9px; }
+
+  .top {
+    padding: calc(0.28rem + var(--safe-top)) 0.65rem 0.28rem;
+  }
+
+  .brand { gap: 0.45rem; }
+
+  .brand-mark {
+    font-size: 0.92rem;
+  }
+
+  .brand-sub { font-size: 0.6rem; margin-top: 0.05rem; }
+
   main {
-    padding: 0.85rem 1.2rem 1rem;
-    max-width: 720px;
+    padding: 0.35rem 0.75rem 0.4rem;
+    max-width: 560px;
     width: 100%;
     margin: 0 auto;
   }
+
+  main.fit {
+    padding-bottom: 0.35rem;
+  }
+
+  .nav-dock {
+    position: sticky;
+    padding: 0.2rem 0.35rem calc(0.22rem + var(--safe-bottom));
+    gap: 0.25rem;
+  }
+
+  .nav-dock a {
+    min-height: 2.55rem;
+    font-size: 0.62rem;
+    padding: 0.2rem 0.15rem;
+  }
+
+  .dock-ico { font-size: 0.92rem; }
+}
+
+@keyframes logoPulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(255, 30, 50, 0.35), 0 0 18px rgba(255, 30, 50, 0.35), 0 8px 16px rgba(0,0,0,.45); }
+  50% { box-shadow: 0 0 0 1px rgba(255, 30, 50, 0.55), 0 0 30px rgba(255, 30, 50, 0.55), 0 8px 16px rgba(0,0,0,.45); }
 }

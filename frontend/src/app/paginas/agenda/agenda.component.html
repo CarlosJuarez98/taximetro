@@ -11,9 +11,15 @@
     <form class="card form" (ngSubmit)="guardar()">
       <p class="label">Nueva reserva (agenda)</p>
 
-      <label>Fecha y hora
-        <input type="datetime-local" [(ngModel)]="form.cuandoLocal" (ngModelChange)="onCuandoChange()" name="cuando" required />
-      </label>
+      <div class="cuando-block">
+        <p class="label">Fecha y hora</p>
+        <app-fecha-hora-picker
+          name="cuando"
+          [(ngModel)]="form.cuandoLocal"
+          (ngModelChange)="onCuandoChange()"
+          [compact]="true"
+        />
+      </div>
 
       @if (conflicto) {
         <p class="aviso-conflicto">Ya tienes otro viaje a esa hora.</p>
@@ -76,15 +82,12 @@
   }
 
   <h2>Pendientes</h2>
-  @if (!pendientes.length) {
-    <p class="muted">Sin cotizaciones pendientes. En Viaje elige Día/Noche y toca Reservar.</p>
-  }
   <ul class="lista">
     @for (r of pendientes; track r.id) {
       <li class="card fila pendiente" [class.conflicto]="r.conflicto">
         <div class="izq">
           <span class="badge-pend">Pendiente</span>
-          <strong>{{ cuandoTxt(r) }}</strong>
+          <strong class="cuando-chip"><span class="hora-dot" aria-hidden="true"></span>{{ cuandoTxt(r) }}</strong>
           <p>{{ r.cliente }}@if (r.telefono) { · {{ r.telefono }} }</p>
           @if (r.destinoTexto) {
             <p class="muted">{{ r.destinoTexto }}</p>
@@ -126,7 +129,7 @@
     @for (r of reservas; track r.id) {
       <li class="card fila" [class.conflicto]="r.conflicto">
         <div class="izq">
-          <strong>{{ cuandoTxt(r) }}</strong>
+          <strong class="cuando-chip"><span class="hora-dot" aria-hidden="true"></span>{{ cuandoTxt(r) }}</strong>
           <p>{{ r.cliente }}@if (r.telefono) { · {{ r.telefono }} }</p>
           @if (r.destinoTexto) {
             <p class="muted">{{ r.destinoTexto }}</p>

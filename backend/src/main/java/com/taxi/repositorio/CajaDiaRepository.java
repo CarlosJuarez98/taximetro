@@ -9,5 +9,5 @@ import com.taxi.modelo.CajaDia;
 
 public interface CajaDiaRepository extends JpaRepository<CajaDia, Long> {
 
-    Optional<CajaDia> findByFecha(LocalDate fecha);
+    Optional<CajaDia> findByFechaAndUsuarioId(LocalDate fecha, Long usuarioId);
 }

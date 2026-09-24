@@ -46,7 +46,7 @@ class CobroServiceTest {
         t.setRedondearPesos(true);
         Instant a = Instant.parse("2026-09-17T15:00:00Z");
         CobroService.Resultado r = cobro.calcularPorKm(t, 8, 0, a, a.plusSeconds(600));
-        // 25 + 8*5 = 65
+        // 25 + 8*5 = 65 (ya cerrado)
         assertEquals(0, new BigDecimal("65").compareTo(r.cobro()));
         assertEquals(8000d, r.metros(), 0.01);
     }
@@ -55,8 +55,21 @@ class CobroServiceTest {
     void viajeCortoConRegresoVacioTipoHuamantla() {
         Tarifa t = new Tarifa();
         Instant a = Instant.parse("2026-09-17T15:00:00Z");
-        // 2.3 + 4.3 vacío = 6.6 → 25 + 33 = 58 (cerca del $50 real, competitivo)
+        // 2.3 + 4.3 vacío = 6.6 → 25 + 33 = 58 → redondeo arriba a 60
         CobroService.Resultado r = cobro.calcularPorKm(t, 6.6, 0, a, a.plusSeconds(600));
-        assertEquals(0, new BigDecimal("58").compareTo(r.cobro()));
+        assertEquals(0, new BigDecimal("60").compareTo(r.cobro()));
+    }
+
+    @Test
+    void redondeaSiempreArribaAMultiploDeCinco() {
+        Tarifa t = new Tarifa();
+        t.setBanderazo(new BigDecimal("25"));
+        t.setPrecioPorKm(new BigDecimal("5.00"));
+        t.setTarifaMinima(new BigDecimal("50"));
+        t.setRedondearPesos(true);
+        Instant a = Instant.parse("2026-09-17T15:00:00Z");
+        // 25 + 5.2*5 = 51 → 55
+        CobroService.Resultado r = cobro.calcularPorKm(t, 5.2, 0, a, a.plusSeconds(600));
+        assertEquals(0, new BigDecimal("55").compareTo(r.cobro()));
     }
 }

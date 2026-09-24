@@ -13,7 +13,9 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 @Entity
-@Table(name = "TX_CAJA_DIA", uniqueConstraints = @UniqueConstraint(columnNames = "fecha"))
+@Table(
+        name = "TX_CAJA_DIA",
+        uniqueConstraints = @UniqueConstraint(columnNames = { "fecha", "usuario_id" }))
 public class CajaDia {
 
     @Id
@@ -22,6 +24,9 @@ public class CajaDia {
 
     @Column(nullable = false)
     private LocalDate fecha;
+
+    @Column(name = "usuario_id")
+    private Long usuarioId;
 
     /** Billete / cambio con el que arrancas el día. */
     @Column(nullable = false, precision = 12, scale = 2)
@@ -50,6 +55,14 @@ public class CajaDia {
 
     public void setFecha(LocalDate fecha) {
         this.fecha = fecha;
+    }
+
+    public Long getUsuarioId() {
+        return usuarioId;
+    }
+
+    public void setUsuarioId(Long usuarioId) {
+        this.usuarioId = usuarioId;
     }
 
     public BigDecimal getFondoInicial() {

@@ -1,0 +1,56 @@
+.usuarios {
+  display: grid;
+  gap: 0.4rem;
+}
+
+h1 { font-size: 1.05rem; }
+
+.label {
+  margin: 0 0 0.25rem;
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 800;
+  color: var(--texto-suave);
+}
+
+.form {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.dos {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.35rem;
+}
+
+.lista {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+
+.fila {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  align-items: center;
+}
+
+.fila.off { opacity: 0.55; }
+
+.fila p, .fila strong { margin: 0; }
+
+.der {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.mini {
+  padding: 0.35rem 0.5rem;
+  font-size: 0.72rem;
+  min-height: 2rem;
+}

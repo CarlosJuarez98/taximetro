@@ -86,6 +86,14 @@ export interface PuntoGps {
 
 export const HUAMANTLA = { lat: 19.3142, lng: -97.925 };
 
+/** Base del taxista (casa / sitio). */
+export const CASA_KEY = 'viaja_casa_gps';
+
+export interface CasaGps {
+  lat: number;
+  lng: number;
+}
+
 /** Cotización pendiente para crear reserva en Agenda. */
 export const RESERVA_BORRADOR_KEY = 'viaja_reserva_borrador';
 
