@@ -47,6 +47,10 @@ public class Tarifa {
     @Column(nullable = false)
     private boolean redondearPesos = true;
 
+    /** Dueño de esta tarifa (cada taxista la suya). Null = plantilla legacy. */
+    @Column(name = "usuario_id")
+    private Long usuarioId;
+
     public Long getId() {
         return id;
     }
@@ -133,5 +137,13 @@ public class Tarifa {
 
     public void setRedondearPesos(boolean redondearPesos) {
         this.redondearPesos = redondearPesos;
+    }
+
+    public Long getUsuarioId() {
+        return usuarioId;
+    }
+
+    public void setUsuarioId(Long usuarioId) {
+        this.usuarioId = usuarioId;
     }
 }

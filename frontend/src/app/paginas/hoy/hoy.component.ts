@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../api.service';
+import { OfflineQueueService } from '../../offline-queue.service';
 import { ResumenHoy, Viaje } from '../../modelos';
 import { dinero, mmss } from '../../cobro.util';
 
@@ -19,11 +20,14 @@ interface Denominacion {
 })
 export class HoyComponent implements OnInit {
   private readonly api = inject(ApiService);
+  private readonly offline = inject(OfflineQueueService);
   resumen: ResumenHoy | null = null;
   viajes: Viaje[] = [];
   error = '';
   ok = '';
   fondoEdit = 0;
+  gastosGasEdit = 0;
+  gastosOtrosEdit = 0;
   guardando = false;
 
   billetes: Denominacion[] = [
@@ -55,6 +59,8 @@ export class HoyComponent implements OnInit {
       next: (r) => {
         this.resumen = r;
         this.fondoEdit = Number(r.fondoInicial || 0);
+        this.gastosGasEdit = Number(r.gastosGasolina || 0);
+        this.gastosOtrosEdit = Number(r.gastosOtros || 0);
       },
       error: () => (this.error = 'No se pudo cargar el resumen.'),
     });
@@ -100,6 +106,28 @@ export class HoyComponent implements OnInit {
     });
   }
 
+  guardarGastos(): void {
+    if (this.guardando) return;
+    this.guardando = true;
+    this.error = '';
+    this.ok = '';
+    const gas = Math.max(0, Number(this.gastosGasEdit) || 0);
+    const otros = Math.max(0, Number(this.gastosOtrosEdit) || 0);
+    this.api.guardarGastos(gas, otros).subscribe({
+      next: (r) => {
+        this.guardando = false;
+        this.resumen = r;
+        this.gastosGasEdit = Number(r.gastosGasolina || 0);
+        this.gastosOtrosEdit = Number(r.gastosOtros || 0);
+        this.ok = 'Gastos guardados.';
+      },
+      error: (e) => {
+        this.guardando = false;
+        this.error = e?.error?.error || 'No se pudieron guardar los gastos.';
+      },
+    });
+  }
+
   hacerCorteCaja(): void {
     if (this.guardando) return;
     const total = this.conteoTotal;
@@ -110,6 +138,12 @@ export class HoyComponent implements OnInit {
     this.guardando = true;
     this.error = '';
     this.ok = '';
+    if (!navigator.onLine) {
+      this.offline.enqueueCorteCaja(total);
+      this.guardando = false;
+      this.ok = 'Sin red: corte en cola. Se enviará al volver en línea.';
+      return;
+    }
     this.api.corteCaja(total).subscribe({
       next: (r) => {
         this.guardando = false;
@@ -121,6 +155,11 @@ export class HoyComponent implements OnInit {
       },
       error: (e) => {
         this.guardando = false;
+        if (!navigator.onLine) {
+          this.offline.enqueueCorteCaja(total);
+          this.ok = 'Sin red: corte en cola.';
+          return;
+        }
         this.error = e?.error?.error || 'No se pudo hacer el corte.';
       },
     });
@@ -182,6 +221,18 @@ export class HoyComponent implements OnInit {
 
   conteoTxt(): string {
     return dinero(this.conteoTotal, false);
+  }
+
+  netoTxt(): string {
+    return dinero(Number(this.resumen?.neto || 0), true);
+  }
+
+  efectivoTxt(): string {
+    return dinero(Number(this.resumen?.cobradoEfectivo ?? this.resumen?.cobrado ?? 0), true);
+  }
+
+  transferTxt(): string {
+    return dinero(Number(this.resumen?.cobradoTransfer || 0), true);
   }
 
   diferenciaTxt(): string {

@@ -41,6 +41,14 @@ public class CajaDia {
     @Column(length = 240)
     private String notas;
 
+    /** Gasolina del día. */
+    @Column(precision = 12, scale = 2)
+    private BigDecimal gastosGasolina = BigDecimal.ZERO;
+
+    /** Otros gastos (comida, lavado…). */
+    @Column(precision = 12, scale = 2)
+    private BigDecimal gastosOtros = BigDecimal.ZERO;
+
     public Long getId() {
         return id;
     }
@@ -95,5 +103,21 @@ public class CajaDia {
 
     public void setNotas(String notas) {
         this.notas = notas;
+    }
+
+    public BigDecimal getGastosGasolina() {
+        return gastosGasolina;
+    }
+
+    public void setGastosGasolina(BigDecimal gastosGasolina) {
+        this.gastosGasolina = gastosGasolina;
+    }
+
+    public BigDecimal getGastosOtros() {
+        return gastosOtros;
+    }
+
+    public void setGastosOtros(BigDecimal gastosOtros) {
+        this.gastosOtros = gastosOtros;
     }
 }

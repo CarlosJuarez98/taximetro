@@ -3,6 +3,8 @@ package com.taxi.controlador;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -43,5 +45,12 @@ public class UsuarioController {
     public UsuarioDto activo(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         boolean activo = body != null && Boolean.TRUE.equals(body.get("activo"));
         return servicio.setActivo(id, activo);
+    }
+
+    @DeleteMapping("/{id}")
+    public Map<String, Object> eliminar(@PathVariable Long id, Authentication authentication) {
+        String actor = authentication != null ? authentication.getName() : null;
+        servicio.eliminar(id, actor);
+        return Map.of("ok", true);
     }
 }

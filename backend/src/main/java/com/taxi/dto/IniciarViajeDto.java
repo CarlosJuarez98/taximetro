@@ -13,4 +13,6 @@ public class IniciarViajeDto {
     public String destinoTexto;
     public List<double[]> ruta;
     public BigDecimal cobroEstimado;
+    public Boolean forzar;
+    public Long reservaId;
 }

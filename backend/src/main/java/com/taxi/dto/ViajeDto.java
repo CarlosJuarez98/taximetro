@@ -25,6 +25,8 @@ public class ViajeDto {
     public BigDecimal casetas;
     public String notas;
     public List<double[]> ruta;
+    public String formaPago;
+    public Long reservaId;
 
     public static ViajeDto de(Viaje v, List<double[]> ruta) {
         ViajeDto dto = new ViajeDto();
@@ -45,6 +47,8 @@ public class ViajeDto {
         dto.casetas = v.getCasetas() == null ? BigDecimal.ZERO : v.getCasetas();
         dto.notas = v.getNotas();
         dto.ruta = ruta;
+        dto.formaPago = v.getFormaPago() == null ? "EFECTIVO" : v.getFormaPago();
+        dto.reservaId = v.getReservaId();
         return dto;
     }
 }

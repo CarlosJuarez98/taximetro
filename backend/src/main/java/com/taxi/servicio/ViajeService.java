@@ -21,10 +21,12 @@ import com.taxi.dto.ResumenHoyDto;
 import com.taxi.dto.ViajeDto;
 import com.taxi.modelo.CajaDia;
 import com.taxi.modelo.PuntoGps;
+import com.taxi.modelo.Reserva;
 import com.taxi.modelo.Tarifa;
 import com.taxi.modelo.Viaje;
 import com.taxi.repositorio.CajaDiaRepository;
 import com.taxi.repositorio.PuntoGpsRepository;
+import com.taxi.repositorio.ReservaRepository;
 import com.taxi.repositorio.ViajeRepository;
 import com.taxi.seguridad.AuthSupport;
 
@@ -34,6 +36,7 @@ public class ViajeService {
     private final ViajeRepository viajes;
     private final PuntoGpsRepository puntos;
     private final CajaDiaRepository cajas;
+    private final ReservaRepository reservas;
     private final TarifaService tarifas;
     private final CobroService cobro;
     private final GeoService geo;
@@ -44,6 +47,7 @@ public class ViajeService {
             ViajeRepository viajes,
             PuntoGpsRepository puntos,
             CajaDiaRepository cajas,
+            ReservaRepository reservas,
             TarifaService tarifas,
             CobroService cobro,
             GeoService geo,
@@ -52,6 +56,7 @@ public class ViajeService {
         this.viajes = viajes;
         this.puntos = puntos;
         this.cajas = cajas;
+        this.reservas = reservas;
         this.tarifas = tarifas;
         this.cobro = cobro;
         this.geo = geo;
@@ -96,12 +101,18 @@ public class ViajeService {
     @Transactional
     public ViajeDto iniciar(IniciarViajeDto req) {
         Long uid = auth.actualId();
-        viajes.findFirstByUsuarioIdAndEstadoOrderByInicioDesc(uid, Viaje.Estado.EN_CURSO).ifPresent(abierto -> {
-            abierto.setEstado(Viaje.Estado.CANCELADO);
-            abierto.setFin(Instant.now());
-            abierto.setNotas("Cancelado al iniciar otro viaje");
-            viajes.save(abierto);
-        });
+        var abierto = viajes.findFirstByUsuarioIdAndEstadoOrderByInicioDesc(uid, Viaje.Estado.EN_CURSO);
+        if (abierto.isPresent()) {
+            if (!Boolean.TRUE.equals(req.forzar)) {
+                throw new IllegalArgumentException(
+                        "Ya hay un viaje en curso. Reanúdalo o cancélalo antes de dar otro banderazo.");
+            }
+            Viaje viejo = abierto.get();
+            viejo.setEstado(Viaje.Estado.CANCELADO);
+            viejo.setFin(Instant.now());
+            viejo.setNotas("Cancelado al iniciar otro viaje");
+            viajes.save(viejo);
+        }
         Viaje v = new Viaje();
         v.setEstado(Viaje.Estado.EN_CURSO);
         v.setUsuarioId(uid);
@@ -112,6 +123,10 @@ public class ViajeService {
         v.setDestinoLat(req.destinoLat);
         v.setDestinoLng(req.destinoLng);
         v.setDestinoTexto(req.destinoTexto);
+        v.setFormaPago("EFECTIVO");
+        if (req.reservaId != null) {
+            v.setReservaId(req.reservaId);
+        }
         if (req.ruta != null && !req.ruta.isEmpty()) {
             v.setRutaGeoJson(escribirJson(req.ruta));
         }
@@ -153,12 +168,33 @@ public class ViajeService {
         }
         v.setFin(Instant.now());
         v.setEstado(Viaje.Estado.CERRADO);
+        if (lote != null && lote.formaPago != null && !lote.formaPago.isBlank()) {
+            String fp = lote.formaPago.trim().toUpperCase();
+            v.setFormaPago("TRANSFER".equals(fp) || "TRANSFERENCIA".equals(fp) ? "TRANSFER" : "EFECTIVO");
+        }
+        ViajeDto dto;
         if (lote != null && lote.kmManual != null && lote.kmManual >= 0) {
             double esperaMin = lote.minutosEspera == null ? 0d : Math.max(0d, lote.minutosEspera);
             double casetas = lote.casetas == null ? 0d : Math.max(0d, lote.casetas);
-            return aplicarKmManual(v, lote.kmManual, esperaMin, casetas);
+            dto = aplicarKmManual(v, lote.kmManual, esperaMin, casetas);
+        } else {
+            dto = recalcular(v, true);
         }
-        return recalcular(v, true);
+        marcarReservaHecha(v.getReservaId());
+        return dto;
+    }
+
+    private void marcarReservaHecha(Long reservaId) {
+        if (reservaId == null) {
+            return;
+        }
+        Long uid = auth.actualId();
+        reservas.findById(reservaId).ifPresent(r -> {
+            if (uid.equals(r.getUsuarioId()) && r.getEstado() != Reserva.Estado.CANCELADA) {
+                r.setEstado(Reserva.Estado.HECHA);
+                reservas.save(r);
+            }
+        });
     }
 
     private ViajeDto aplicarKmManual(Viaje v, double km, double minutosEspera, double casetas) {
@@ -216,6 +252,8 @@ public class ViajeService {
         List<Viaje> lista = viajes.findByUsuarioIdAndInicioGreaterThanEqualOrderByInicioDesc(uid, desde);
         ResumenHoyDto r = new ResumenHoyDto();
         BigDecimal cobrado = BigDecimal.ZERO;
+        BigDecimal efectivo = BigDecimal.ZERO;
+        BigDecimal transfer = BigDecimal.ZERO;
         BigDecimal metros = BigDecimal.ZERO;
         long segundos = 0;
         long n = 0;
@@ -224,15 +262,23 @@ public class ViajeService {
                 continue;
             }
             n++;
-            cobrado = cobrado.add(nvl(v.getCobro()));
+            BigDecimal c = nvl(v.getCobro());
+            cobrado = cobrado.add(c);
+            if ("TRANSFER".equalsIgnoreCase(v.getFormaPago())) {
+                transfer = transfer.add(c);
+            } else {
+                efectivo = efectivo.add(c);
+            }
             metros = metros.add(nvl(v.getDistanciaMetros()));
             segundos += v.getDuracionSegundos();
         }
         r.viajes = n;
         r.cobrado = cobrado.setScale(0, RoundingMode.HALF_UP);
+        r.cobradoEfectivo = efectivo.setScale(0, RoundingMode.HALF_UP);
+        r.cobradoTransfer = transfer.setScale(0, RoundingMode.HALF_UP);
         r.km = metros.divide(BigDecimal.valueOf(1000), 2, RoundingMode.HALF_UP);
         r.minutos = segundos / 60;
-        aplicarCaja(r, cobrado);
+        aplicarCaja(r, efectivo);
         return r;
     }
 
@@ -266,14 +312,37 @@ public class ViajeService {
         return hoy();
     }
 
-    private void aplicarCaja(ResumenHoyDto r, BigDecimal cobrado) {
+    @Transactional
+    public ResumenHoyDto guardarGastos(BigDecimal gasolina, BigDecimal otros) {
+        CajaDia caja = cajaHoy();
+        BigDecimal g = nvl(gasolina).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal o = nvl(otros).setScale(2, RoundingMode.HALF_UP);
+        if (g.compareTo(BigDecimal.ZERO) < 0 || o.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Los gastos no pueden ser negativos");
+        }
+        caja.setGastosGasolina(g);
+        caja.setGastosOtros(o);
+        cajas.save(caja);
+        return hoy();
+    }
+
+    private void aplicarCaja(ResumenHoyDto r, BigDecimal cobradoEfectivo) {
         Long uid = auth.actualId();
         CajaDia caja = cajas.findByFechaAndUsuarioId(LocalDate.now(CobroService.ZONA), uid).orElse(null);
         BigDecimal fondo = caja == null ? BigDecimal.ZERO : nvl(caja.getFondoInicial());
         fondo = fondo.setScale(2, RoundingMode.HALF_UP);
-        BigDecimal esperado = fondo.add(nvl(cobrado)).setScale(2, RoundingMode.HALF_UP);
+        BigDecimal gas = caja == null ? BigDecimal.ZERO : nvl(caja.getGastosGasolina());
+        BigDecimal otros = caja == null ? BigDecimal.ZERO : nvl(caja.getGastosOtros());
+        gas = gas.setScale(2, RoundingMode.HALF_UP);
+        otros = otros.setScale(2, RoundingMode.HALF_UP);
+        // Caja física: fondo + efectivo − gastos (transferencias no entran al cajón)
+        BigDecimal esperado = fondo.add(nvl(cobradoEfectivo)).subtract(gas).subtract(otros)
+                .setScale(2, RoundingMode.HALF_UP);
         r.fondoInicial = fondo;
+        r.gastosGasolina = gas;
+        r.gastosOtros = otros;
         r.esperadoEnCaja = esperado;
+        r.neto = nvl(r.cobrado).subtract(gas).subtract(otros).setScale(0, RoundingMode.HALF_UP);
         if (caja != null && caja.getConteoReal() != null) {
             r.conteoReal = caja.getConteoReal().setScale(2, RoundingMode.HALF_UP);
             r.diferencia = r.conteoReal.subtract(esperado).setScale(2, RoundingMode.HALF_UP);

@@ -73,6 +73,14 @@ public class Viaje {
     @Column(name = "usuario_id")
     private Long usuarioId;
 
+    /** EFECTIVO o TRANSFER. */
+    @Column(length = 20)
+    private String formaPago = "EFECTIVO";
+
+    /** Reserva de agenda que originó este viaje (opcional). */
+    @Column(name = "reserva_id")
+    private Long reservaId;
+
     public Long getId() {
         return id;
     }
@@ -215,5 +223,21 @@ public class Viaje {
 
     public void setUsuarioId(Long usuarioId) {
         this.usuarioId = usuarioId;
+    }
+
+    public String getFormaPago() {
+        return formaPago;
+    }
+
+    public void setFormaPago(String formaPago) {
+        this.formaPago = formaPago;
+    }
+
+    public Long getReservaId() {
+        return reservaId;
+    }
+
+    public void setReservaId(Long reservaId) {
+        this.reservaId = reservaId;
     }
 }

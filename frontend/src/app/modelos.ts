@@ -45,6 +45,8 @@ export interface Viaje {
   casetas?: number;
   notas?: string | null;
   ruta?: number[][];
+  formaPago?: 'EFECTIVO' | 'TRANSFER';
+  reservaId?: number;
 }
 
 export interface ResumenHoy {
@@ -57,6 +59,20 @@ export interface ResumenHoy {
   conteoReal?: number | null;
   diferencia?: number | null;
   cortada?: boolean;
+  cobradoEfectivo?: number;
+  cobradoTransfer?: number;
+  gastosGasolina?: number;
+  gastosOtros?: number;
+  neto?: number;
+}
+
+export interface TarifaFija {
+  id?: number;
+  nombre: string;
+  cobro: number;
+  km?: number;
+  notas?: string;
+  activo?: boolean;
 }
 
 export interface Reserva {
@@ -98,6 +114,30 @@ export interface CasaGps {
 
 /** Cotización pendiente para crear reserva en Agenda. */
 export const RESERVA_BORRADOR_KEY = 'viaja_reserva_borrador';
+
+export const VIAJE_ESTADO_KEY = 'viaja_viaje_estado';
+
+export interface ViajeEstadoLocal {
+  fase: 'vacio' | 'con_cliente';
+  kmCliente: number | null;
+  kmVacioIda: number;
+  kmVacioRegreso: number;
+  modos: {
+    vacioIda: 'nada' | 'mitad' | 'completo';
+    vacioRegreso: 'nada' | 'mitad' | 'completo';
+    caseta: 'nada' | 'mitad' | 'completo';
+  };
+  casetas: number;
+  esperaSeg: number;
+  reservaId?: number;
+  destinoCotiza?: string;
+  clienteCotiza?: string;
+  telefono?: string;
+  formaPago?: 'EFECTIVO' | 'TRANSFER';
+  cobroFijo?: number;
+}
+
+export const DESDE_RESERVA_KEY = 'viaja_desde_reserva';
 
 export interface ReservaBorrador {
   cuandoLocal?: string;

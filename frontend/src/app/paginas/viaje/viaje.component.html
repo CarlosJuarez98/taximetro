@@ -61,6 +61,43 @@
         }
       </div>
 
+      @if (tarifasFijas.length) {
+        <div class="mini-card">
+          <p class="mini-title">Tarifas fijas</p>
+          <div class="pct chips-fijas">
+            @for (tf of tarifasFijas; track tf.id) {
+              <button type="button" class="modo wide" [class.activo]="cobroFijo === tf.cobro && destinoCotiza === tf.nombre" (click)="aplicarTarifaFija(tf)">
+                {{ tf.nombre }} · ${{ tf.cobro }}
+              </button>
+            }
+            @if (cobroFijo != null) {
+              <button type="button" class="modo" (click)="limpiarTarifaFija()">× calc</button>
+            }
+          </div>
+        </div>
+      }
+
+      <div class="mini-card">
+        <p class="mini-title">Buscar destino (Maps)</p>
+        <div class="tramo-row">
+          <input
+            class="grow"
+            [(ngModel)]="destinoBusqueda"
+            name="destinoBusqueda"
+            placeholder="ej. Apizaco…"
+            (keyup.enter)="buscarDestino()"
+          />
+          <button type="button" class="btn btn-seco mini" (click)="buscarDestino()" [disabled]="buscandoGeo">Ir</button>
+        </div>
+        @if (lugaresBusqueda.length) {
+          <ul class="lugares">
+            @for (l of lugaresBusqueda; track l.etiqueta) {
+              <li><button type="button" class="btn btn-seco mini wide" (click)="elegirLugar(l)">{{ l.etiqueta }}</button></li>
+            }
+          </ul>
+        }
+      </div>
+
       <div class="pct horario" role="group" aria-label="Horario del estimado">
         <button type="button" class="modo wide" [class.activo]="modoHorario === 'ahora'" (click)="setHorario('ahora')">Ahora</button>
         <button type="button" class="modo wide" [class.activo]="modoHorario === 'dia'" (click)="setHorario('dia')">Día</button>
@@ -132,6 +169,9 @@
 
         <div class="mini-card">
           <p class="mini-title">Con cliente</p>
+          @if (cobroFijo != null) {
+            <p class="chip">Tarifa fija · sin calcular km</p>
+          }
           <div class="tramo-row km-espera">
             <label class="campo grow">
               Km
@@ -353,6 +393,13 @@
           Recogí cliente
         </button>
       } @else {
+        <div class="pago-corte mini-card">
+          <p class="mini-title">¿Cómo paga?</p>
+          <div class="pct" role="group">
+            <button type="button" class="modo wide" [class.activo]="formaPagoCorte === 'EFECTIVO'" (click)="setFormaPago('EFECTIVO')">Efectivo</button>
+            <button type="button" class="modo wide" [class.activo]="formaPagoCorte === 'TRANSFER'" (click)="setFormaPago('TRANSFER')">Transfer</button>
+          </div>
+        </div>
         <button type="button" class="btn btn-ok grande" (click)="corte()" [disabled]="accionando">
           {{ accionando ? 'Cortando…' : 'Corte' }}
         </button>
@@ -379,7 +426,11 @@
       @if ((recibo.casetas || 0) > 0) {
         <p class="muted">Casetas {{ casetasRecibo }}</p>
       }
+      @if (recibo.formaPago) {
+        <p class="muted">Pago {{ recibo.formaPago === 'TRANSFER' ? 'transferencia' : 'efectivo' }}</p>
+      }
 
+      @if (!esTransferRecibo) {
       <div class="cambio-box">
         <p class="label">¿Con qué billete paga?</p>
         <div class="billetes">
@@ -413,6 +464,7 @@
           </p>
         }
       </div>
+      }
 
       <div class="acciones">
         <button type="button" class="btn btn-ok" (click)="compartirWhatsapp()">WhatsApp</button>

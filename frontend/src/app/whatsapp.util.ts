@@ -180,12 +180,12 @@ export async function crearTarjetaWhatsapp(data: TarjetaWhatsapp): Promise<Blob>
     ctx.fillStyle = 'rgba(196,168,174,0.9)';
     ctx.font = '600 24px Manrope, Arial, sans-serif';
     y = wrapText(ctx, LEYENDA_ESTIMADO, size / 2, y + 8, size - 160, 32) + 16;
-  }
 
-  const slogan = data.slogan || sloganAleatorio();
-  ctx.fillStyle = '#ff4d5c';
-  ctx.font = '700 28px Manrope, Arial, sans-serif';
-  wrapText(ctx, slogan, size / 2, Math.min(Math.max(y + 20, 780), 880), size - 160, 36);
+    const slogan = data.slogan || sloganAleatorio();
+    ctx.fillStyle = '#ff4d5c';
+    ctx.font = '700 28px Manrope, Arial, sans-serif';
+    wrapText(ctx, slogan, size / 2, Math.min(Math.max(y + 20, 780), 880), size - 160, 36);
+  }
 
   ctx.fillStyle = 'rgba(196,168,174,0.7)';
   ctx.font = '600 22px Manrope, Arial, sans-serif';
@@ -202,7 +202,6 @@ function esEtiquetaHorario(t: string): boolean {
 }
 
 function textoCorto(data: TarjetaWhatsapp): string {
-  const slogan = data.slogan || sloganAleatorio();
   const lineas = ['*Viaja en el Rojo*'];
   if (data.tipo === 'estimado') {
     lineas.push('Estimado');
@@ -219,8 +218,8 @@ function textoCorto(data: TarjetaWhatsapp): string {
   }
   if (data.tipo === 'estimado') {
     lineas.push(LEYENDA_ESTIMADO);
+    lineas.push(`_${data.slogan || sloganAleatorio()}_`);
   }
-  lineas.push(`_${slogan}_`);
   return lineas.join('\n');
 }
 
@@ -258,13 +257,16 @@ export type ResultadoShareWa = {
 
 /**
  * Comparte la tarjeta (imagen).
- * - iOS: foto + texto en caption.
- * - Android: solo foto (si mandamos text, WA lo pone en otra burbuja);
- *   el texto queda en portapapeles para pegar en «Añadir mensaje».
+ * - recibo: solo foto (sin caption).
+ * - estimado: iOS foto+texto; Android solo foto + texto en portapapeles.
  */
 export async function compartirWhatsappTarjeta(data: TarjetaWhatsapp): Promise<ResultadoShareWa> {
-  const payload = { ...data, slogan: data.slogan || sloganAleatorio() };
-  const texto = textoCorto(payload);
+  const soloImagen = data.tipo === 'recibo';
+  const payload =
+    data.tipo === 'estimado'
+      ? { ...data, slogan: data.slogan || sloganAleatorio() }
+      : { ...data, slogan: undefined };
+  const texto = soloImagen ? '' : textoCorto(payload);
   const blob = await crearTarjetaWhatsapp(payload);
   const file = new File(
     [blob],
@@ -272,7 +274,9 @@ export async function compartirWhatsappTarjeta(data: TarjetaWhatsapp): Promise<R
     { type: 'image/png' }
   );
 
-  await copiarTextoSeguro(texto);
+  if (!soloImagen) {
+    await copiarTextoSeguro(texto);
+  }
 
   const esAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent || '');
   const nav = navigator as Navigator & {
@@ -282,14 +286,15 @@ export async function compartirWhatsappTarjeta(data: TarjetaWhatsapp): Promise<R
 
   if (typeof nav.share === 'function' && (!nav.canShare || nav.canShare({ files: [file] }))) {
     try {
-      const shareData: ShareData = esAndroid
-        ? { files: [file], title: 'Viaja en el Rojo' }
-        : { files: [file], title: 'Viaja en el Rojo', text: texto };
+      const shareData: ShareData =
+        soloImagen || esAndroid
+          ? { files: [file], title: 'Viaja en el Rojo' }
+          : { files: [file], title: 'Viaja en el Rojo', text: texto };
       await nav.share(shareData);
-      return { modo: 'compartido', pegarCaption: esAndroid };
+      return { modo: 'compartido', pegarCaption: !soloImagen && esAndroid };
     } catch (e) {
       if ((e as Error)?.name === 'AbortError') {
-        return { modo: 'compartido', pegarCaption: esAndroid };
+        return { modo: 'compartido', pegarCaption: !soloImagen && esAndroid };
       }
     }
   }
@@ -300,5 +305,5 @@ export async function compartirWhatsappTarjeta(data: TarjetaWhatsapp): Promise<R
   a.download = file.name;
   a.click();
   URL.revokeObjectURL(url);
-  return { modo: 'descargado', pegarCaption: true };
+  return { modo: 'descargado', pegarCaption: !soloImagen };
 }

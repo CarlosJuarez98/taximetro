@@ -1,12 +1,27 @@
 import { Component, OnDestroy, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { Router } from '@angular/router';
-import { Subscription } from 'rxjs';
+import { ActivatedRoute, Router } from '@angular/router';
+import { Subscription, firstValueFrom } from 'rxjs';
 import { ApiService } from '../../api.service';
+import { OfflineQueueService } from '../../offline-queue.service';
 import { FechaHoraPickerComponent } from '../../fecha-hora-picker/fecha-hora-picker.component';
 import { SugerenciaCampoComponent } from '../../sugerencia-campo.component';
 import { FeedbackService } from '../../feedback.service';
-import { HUAMANTLA, CASA_KEY, CasaGps, RESERVA_BORRADOR_KEY, ReservaBorrador, Tarifa, Viaje } from '../../modelos';
+import {
+  HUAMANTLA,
+  CASA_KEY,
+  CasaGps,
+  RESERVA_BORRADOR_KEY,
+  ReservaBorrador,
+  Tarifa,
+  TarifaFija,
+  Viaje,
+  Lugar,
+  Reserva,
+  VIAJE_ESTADO_KEY,
+  ViajeEstadoLocal,
+  DESDE_RESERVA_KEY,
+} from '../../modelos';
 import { calcularCobroPorKm, clampHoraFranja, dinero, duracionLegible, esNoche, haversineMetros, mmss, redondearPago } from '../../cobro.util';
 import { compartirWhatsappTarjeta, sloganAleatorio } from '../../whatsapp.util';
 
@@ -25,7 +40,9 @@ type ModoHorario = 'ahora' | 'dia' | 'noche';
 export class ViajeComponent implements OnInit, OnDestroy {
   private readonly api = inject(ApiService);
   private readonly router = inject(Router);
+  private readonly route = inject(ActivatedRoute);
   private readonly feedback = inject(FeedbackService);
+  private readonly offline = inject(OfflineQueueService);
 
   tarifa: Tarifa | null = null;
   error = '';
@@ -57,6 +74,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
   /** Fecha/hora concreta al cotizar día o noche (pendiente). */
   cuandoLocal = '';
   clienteCotiza = '';
+  telefonoCotiza = '';
   destinoCotiza = '';
   clientesHist: string[] = [];
   destinosHist: string[] = [];
@@ -77,6 +95,15 @@ export class ViajeComponent implements OnInit, OnDestroy {
    * con_cliente = ya lo subiste (GPS → km cobrables con él).
    */
   faseViaje: 'vacio' | 'con_cliente' = 'vacio';
+
+  /** Reserva de agenda ligada al viaje actual. */
+  reservaIdActiva?: number;
+  formaPagoCorte: 'EFECTIVO' | 'TRANSFER' = 'EFECTIVO';
+  cobroFijo: number | null = null;
+  tarifasFijas: TarifaFija[] = [];
+  destinoBusqueda = '';
+  lugaresBusqueda: Lugar[] = [];
+  buscandoGeo = false;
 
   esperaMotivo: MotivoEspera | null = null;
   private esperaAcumuladaSeg = 0;
@@ -189,6 +216,9 @@ export class ViajeComponent implements OnInit, OnDestroy {
   }
 
   get cotizacionTxt(): string {
+    if (this.cobroFijo != null && !this.hayViaje) {
+      return dinero(this.totalPago(this.cobroFijo));
+    }
     if (!this.tarifa || this.kmCliente == null || this.kmCliente < 0) {
       return '—';
     }
@@ -203,6 +233,9 @@ export class ViajeComponent implements OnInit, OnDestroy {
   }
 
   get desgloseKm(): string {
+    if (this.cobroFijo != null && !this.hayViaje) {
+      return `Tarifa fija ${dinero(this.cobroFijo)}`;
+    }
     const partes: string[] = [];
     const con = Math.max(0, Number(this.kmCliente) || 0);
     if (con > 0) partes.push(`con cliente ${con} km`);
@@ -304,9 +337,19 @@ export class ViajeComponent implements OnInit, OnDestroy {
     return 'ahora';
   }
 
+  get esTransferRecibo(): boolean {
+    const fp = (this.recibo?.formaPago || this.formaPagoCorte || 'EFECTIVO').toUpperCase();
+    return fp === 'TRANSFER';
+  }
+
   ngOnInit(): void {
     this.casaLista = !!this.leerCasaRaw();
     this.cargarHistorial();
+    this.api.tarifasFijas().subscribe({
+      next: (l) => (this.tarifasFijas = (l || []).filter((f) => f.activo !== false)),
+      error: () => {},
+    });
+    this.aplicarPrefillReserva();
     this.subs.add(
       this.api.tarifa().subscribe({
         next: (t) => {
@@ -320,9 +363,168 @@ export class ViajeComponent implements OnInit, OnDestroy {
       this.api.enCurso().subscribe((v) => {
         if (v && v.id && v.estado === 'EN_CURSO') {
           this.reanudar(v as Viaje);
+          this.restaurarViajeEstado();
         }
       }),
     );
+  }
+
+  setFormaPago(fp: 'EFECTIVO' | 'TRANSFER'): void {
+    this.formaPagoCorte = fp;
+    if (this.hayViaje) this.persistirViajeEstado();
+  }
+
+  aplicarTarifaFija(tf: TarifaFija): void {
+    this.cobroFijo = Math.max(0, Number(tf.cobro) || 0);
+    this.destinoCotiza = tf.nombre;
+    if (tf.km != null && Number(tf.km) > 0) {
+      this.kmCliente = Number(tf.km);
+    }
+    this.recalcularVivo();
+  }
+
+  limpiarTarifaFija(): void {
+    this.cobroFijo = null;
+    this.recalcularVivo();
+  }
+
+  buscarDestino(): void {
+    const q = this.destinoBusqueda.trim();
+    if (q.length < 3) return;
+    this.buscandoGeo = true;
+    this.api.buscar(q).subscribe({
+      next: (r) => {
+        this.buscandoGeo = false;
+        this.lugaresBusqueda = r.lugares || [];
+      },
+      error: () => {
+        this.buscandoGeo = false;
+        this.lugaresBusqueda = [];
+      },
+    });
+  }
+
+  elegirLugar(l: Lugar): void {
+    this.lugaresBusqueda = [];
+    this.destinoBusqueda = l.etiqueta;
+    this.destinoCotiza = l.etiqueta;
+    void this.estimarKmHasta(l);
+  }
+
+  private async estimarKmHasta(dest: Lugar): Promise<void> {
+    const pos = await this.leerUbicacion();
+    const origenLat = pos.gps ? pos.lat : HUAMANTLA.lat;
+    const origenLng = pos.gps ? pos.lng : HUAMANTLA.lng;
+    this.api
+      .estimar({
+        origenLat,
+        origenLng,
+        destinoLat: dest.lat,
+        destinoLng: dest.lng,
+        destinoTexto: dest.etiqueta,
+      })
+      .subscribe({
+        next: (e) => {
+          this.kmCliente = Math.round((e.distanciaMetros / 1000) * 10) / 10;
+          this.cobroFijo = null;
+          this.onKmChange();
+        },
+        error: () => (this.error = 'No se pudo estimar la ruta.'),
+      });
+  }
+
+  private aplicarPrefillReserva(): void {
+    let r: Reserva | null = null;
+    try {
+      const raw = sessionStorage.getItem(DESDE_RESERVA_KEY);
+      if (raw) r = JSON.parse(raw) as Reserva;
+    } catch {
+      /* ignore */
+    }
+    const qId = Number(this.route.snapshot.queryParamMap.get('reserva') || 0);
+    if (qId && r?.id && r.id !== qId) {
+      /* id en URL manda si no coincide */
+    }
+    if (!r && qId) {
+      r = { id: qId } as Reserva;
+    }
+    if (!r) return;
+
+    if (r.id) this.reservaIdActiva = r.id;
+    if (r.kmEstimado != null && r.kmEstimado > 0) this.kmCliente = Number(r.kmEstimado);
+    if (r.destinoTexto) this.destinoCotiza = r.destinoTexto;
+    if (r.casetas != null) this.casetasIda = Number(r.casetas) || 0;
+    if (r.nocturno) this.modoHorario = 'noche';
+    if (r.cliente) this.clienteCotiza = r.cliente;
+    if (r.telefono) this.telefonoCotiza = r.telefono;
+    if (r.cobroEstimado != null && Number(r.cobroEstimado) > 0) {
+      this.cobroFijo = Number(r.cobroEstimado);
+      this.okMsg = `Reserva · cobro ref. ${dinero(this.cobroFijo)}`;
+    } else {
+      this.okMsg = 'Datos de la reserva cargados.';
+    }
+    this.recalcularVivo();
+  }
+
+  private persistirViajeEstado(): void {
+    if (!this.enCurso?.id) {
+      localStorage.removeItem(VIAJE_ESTADO_KEY);
+      return;
+    }
+    const estado: ViajeEstadoLocal = {
+      fase: this.faseViaje,
+      kmCliente: this.kmCliente,
+      kmVacioIda: this.kmVacioIda,
+      kmVacioRegreso: this.kmVacioRegreso,
+      modos: {
+        vacioIda: this.modoVacioIda,
+        vacioRegreso: this.modoVacioRegreso,
+        caseta: this.modoRegreso,
+      },
+      casetas: this.casetasIda,
+      esperaSeg: this.esperaSegundos,
+      reservaId: this.reservaIdActiva,
+      destinoCotiza: this.destinoCotiza || undefined,
+      clienteCotiza: this.clienteCotiza || undefined,
+      telefono: this.telefonoCotiza || undefined,
+      formaPago: this.formaPagoCorte,
+      cobroFijo: this.cobroFijo ?? undefined,
+    };
+    localStorage.setItem(VIAJE_ESTADO_KEY, JSON.stringify(estado));
+  }
+
+  private restaurarViajeEstado(): void {
+    if (!this.hayViaje) return;
+    try {
+      const raw = localStorage.getItem(VIAJE_ESTADO_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw) as ViajeEstadoLocal;
+      this.faseViaje = s.fase || this.faseViaje;
+      if (s.kmCliente != null) this.kmCliente = s.kmCliente;
+      this.kmVacioIda = s.kmVacioIda ?? this.kmVacioIda;
+      this.kmVacioRegreso = s.kmVacioRegreso ?? this.kmVacioRegreso;
+      if (s.modos) {
+        this.modoVacioIda = s.modos.vacioIda ?? this.modoVacioIda;
+        this.modoVacioRegreso = s.modos.vacioRegreso ?? this.modoVacioRegreso;
+        this.modoRegreso = s.modos.caseta ?? this.modoRegreso;
+      }
+      this.casetasIda = s.casetas ?? this.casetasIda;
+      if (s.esperaSeg > 0) this.esperaAcumuladaSeg = s.esperaSeg;
+      if (s.reservaId) this.reservaIdActiva = s.reservaId;
+      if (s.destinoCotiza) this.destinoCotiza = s.destinoCotiza;
+      if (s.clienteCotiza) this.clienteCotiza = s.clienteCotiza;
+      if (s.telefono) this.telefonoCotiza = s.telefono;
+      if (s.formaPago) this.formaPagoCorte = s.formaPago;
+      if (s.cobroFijo != null) this.cobroFijo = s.cobroFijo;
+      this.recalcularVivo();
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private limpiarEstadoLocal(): void {
+    localStorage.removeItem(VIAJE_ESTADO_KEY);
+    sessionStorage.removeItem(DESDE_RESERVA_KEY);
   }
 
   private cargarHistorial(): void {
@@ -352,6 +554,13 @@ export class ViajeComponent implements OnInit, OnDestroy {
       localStorage.setItem(CASA_KEY, JSON.stringify(casa));
       this.casaLista = true;
       this.okMsg = 'Casa guardada. Al cortar se calcula el vacío de regreso.';
+      if (this.lastLat != null && this.lastLng != null) {
+        void this.estimarKmVacioRegreso(this.lastLat, this.lastLng).then((km) => {
+          this.kmVacioRegreso = km;
+          this.recalcularVivo();
+          if (this.hayViaje) this.persistirViajeEstado();
+        });
+      }
     });
   }
 
@@ -363,6 +572,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
 
   onKmChange(): void {
     this.recalcularVivo();
+    if (this.hayViaje) this.persistirViajeEstado();
   }
 
   setProporcion(campo: 'vacioIda' | 'vacioRegreso' | 'caseta', modo: Proporcion): void {
@@ -370,6 +580,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
     else if (campo === 'vacioRegreso') this.modoVacioRegreso = modo;
     else this.modoRegreso = modo;
     this.recalcularVivo();
+    if (this.hayViaje) this.persistirViajeEstado();
   }
 
   setHorario(modo: ModoHorario): void {
@@ -519,6 +730,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
     this.esperaInicioMs = Date.now();
     this.error = '';
     this.recalcularVivo();
+    if (this.hayViaje) this.persistirViajeEstado();
   }
 
   pausarEspera(): void {
@@ -527,8 +739,8 @@ export class ViajeComponent implements OnInit, OnDestroy {
     this.esperaMotivo = null;
     this.esperaInicioMs = 0;
     this.recalcularVivo();
+    if (this.hayViaje) this.persistirViajeEstado();
   }
-
   /** @param clienteAqui true = sube donde estás (sin vacío ida). false = sales de base por él. */
   banderazo(clienteAqui = false): void {
     if (this.accionando) return;
@@ -551,43 +763,60 @@ export class ViajeComponent implements OnInit, OnDestroy {
     this.kmVacioRegreso = 0;
     this.faseViaje = clienteAqui ? 'con_cliente' : 'vacio';
 
+    this.api.enCurso().subscribe({
+      next: (v) => {
+        const hayOtro = !!(v && v.id && v.estado === 'EN_CURSO');
+        if (hayOtro && !confirm('Ya hay un viaje en curso. ¿Forzar nuevo banderazo?')) {
+          this.accionando = false;
+          this.feedback.stop();
+          return;
+        }
+        void this.ejecutarInicio(clienteAqui, hayOtro);
+      },
+      error: () => void this.ejecutarInicio(clienteAqui, false),
+    });
+  }
+
+  private ejecutarInicio(clienteAqui: boolean, forzar: boolean): void {
     void this.leerUbicacion()
       .then((pos) => {
-        this.api
-          .iniciar({
-            origenLat: pos.lat,
-            origenLng: pos.lng,
-            origenTexto: pos.gps ? 'GPS' : 'Viaja en el Rojo',
-          })
-          .subscribe({
-            next: (v) => {
-              this.accionando = false;
-              this.feedback.stop();
-              this.feedback.ok();
-              this.enCurso = v;
-              this.inicioMs = Date.now();
-              this.segundos = 0;
-              this.lastLat = pos.lat;
-              this.lastLng = pos.lng;
-              this.recalcularVivo();
-              this.iniciarTick();
-              if (pos.gps) {
-                this.gpsFallo = false;
-                this.iniciarGps();
-                this.okMsg = clienteAqui
-                  ? 'Cliente a bordo. GPS contando. Corte cuando diga “aquí”.'
-                  : 'Vas por el cliente. Cuando lo subas toca “Recogí cliente”.';
-              } else {
-                this.marcarGpsFallo('Sin GPS. Pon los km a mano o activa la ubicación.');
-              }
-            },
-            error: (e) => {
-              this.accionando = false;
-              this.feedback.stop();
-              this.feedback.error();
-              this.error = e?.error?.error || 'No se pudo dar banderazo.';
-            },
-          });
+        const body: Record<string, unknown> = {
+          origenLat: pos.lat,
+          origenLng: pos.lng,
+          origenTexto: pos.gps ? 'GPS' : 'Viaja en el Rojo',
+        };
+        if (forzar) body['forzar'] = true;
+        if (this.reservaIdActiva) body['reservaId'] = this.reservaIdActiva;
+        this.api.iniciar(body).subscribe({
+          next: (v) => {
+            this.accionando = false;
+            this.feedback.stop();
+            this.feedback.ok();
+            this.enCurso = v;
+            this.inicioMs = Date.now();
+            this.segundos = 0;
+            this.lastLat = pos.lat;
+            this.lastLng = pos.lng;
+            this.recalcularVivo();
+            this.iniciarTick();
+            this.persistirViajeEstado();
+            if (pos.gps) {
+              this.gpsFallo = false;
+              this.iniciarGps();
+              this.okMsg = clienteAqui
+                ? 'Cliente a bordo. GPS contando. Corte cuando diga “aquí”.'
+                : 'Vas por el cliente. Cuando lo subas toca “Recogí cliente”.';
+            } else {
+              this.marcarGpsFallo('Sin GPS. Pon los km a mano o activa la ubicación.');
+            }
+          },
+          error: (e) => {
+            this.accionando = false;
+            this.feedback.stop();
+            this.feedback.error();
+            this.error = e?.error?.error || 'No se pudo dar banderazo.';
+          },
+        });
       })
       .catch(() => {
         this.accionando = false;
@@ -621,6 +850,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
       this.iniciarGps();
     }
     this.recalcularVivo();
+    this.persistirViajeEstado();
   }
 
   corte(): void {
@@ -642,18 +872,35 @@ export class ViajeComponent implements OnInit, OnDestroy {
     this.error = '';
     this.okMsg = '';
 
-    void this.leerUbicacion().then((pos) => {
-      // Vacío regreso: de “déjame acá” hasta casa
+    const viajeId = this.enCurso.id;
+    const reservaBackup = this.reservaIdActiva;
+    const fp = this.formaPagoCorte;
+
+    void this.leerUbicacion().then(async (pos) => {
       if (pos.gps) {
         this.lastLat = pos.lat;
         this.lastLng = pos.lng;
-        this.kmVacioRegreso = this.kmHastaCasa(pos.lat, pos.lng);
-      } else if (this.lastLat != null && this.lastLng != null) {
-        this.kmVacioRegreso = this.kmHastaCasa(this.lastLat, this.lastLng);
+      }
+      const lat = pos.gps ? pos.lat : this.lastLat;
+      const lng = pos.gps ? pos.lng : this.lastLng;
+      if (lat != null && lng != null) {
+        this.kmVacioRegreso = await this.estimarKmVacioRegreso(lat, lng);
       }
       this.ultimoDesglose = this.armarDesgloseTexto();
       const minEspera = Math.round((this.esperaSegundos / 60) * 100) / 100;
-      this.api.corte(this.enCurso!.id, [], this.kmCobrables, minEspera, this.casetasTotal).subscribe({
+      const km = this.kmCobrables;
+      const casetas = this.casetasTotal;
+
+      if (!navigator.onLine) {
+        this.offline.enqueueCorte(viajeId, [], km, minEspera, casetas, fp);
+        this.accionando = false;
+        this.feedback.stop();
+        this.okMsg = 'Sin red: corte en cola. Se enviará al volver en línea.';
+        this.finalizarCorteLocal(reservaBackup);
+        return;
+      }
+
+      this.api.corte(viajeId, [], km, minEspera, casetas, fp).subscribe({
         next: (v) => {
           this.accionando = false;
           this.feedback.stop();
@@ -662,19 +909,52 @@ export class ViajeComponent implements OnInit, OnDestroy {
           this.billetePago = null;
           this.cobroVivo = Number(v.cobro);
           this.segundos = v.duracionSegundos;
-          this.enCurso = null;
-          this.faseViaje = 'vacio';
-          this.gpsFallo = false;
-          this.limpiarTick();
+          this.finalizarCorteLocal(reservaBackup);
         },
         error: (e) => {
           this.accionando = false;
           this.feedback.stop();
           this.feedback.error();
+          if (!navigator.onLine) {
+            this.offline.enqueueCorte(viajeId, [], km, minEspera, casetas, fp);
+            this.okMsg = 'Sin red: corte en cola.';
+            this.finalizarCorteLocal(reservaBackup);
+            return;
+          }
           this.error = e?.error?.error || 'No se pudo cortar el viaje.';
         },
       });
     });
+  }
+
+  private finalizarCorteLocal(reservaId?: number): void {
+    this.enCurso = null;
+    this.faseViaje = 'vacio';
+    this.gpsFallo = false;
+    this.reservaIdActiva = undefined;
+    this.limpiarEstadoLocal();
+    this.limpiarTick();
+    if (reservaId) {
+      this.api.reservaHecha(reservaId).subscribe({ error: () => {} });
+    }
+  }
+
+  private async estimarKmVacioRegreso(lat: number, lng: number): Promise<number> {
+    const casa = this.coordsCasa();
+    try {
+      const e = await firstValueFrom(
+        this.api.estimar({
+          origenLat: lat,
+          origenLng: lng,
+          destinoLat: casa.lat,
+          destinoLng: casa.lng,
+          destinoTexto: 'Casa',
+        }),
+      );
+      return Math.round((e.distanciaMetros / 1000) * 10) / 10;
+    } catch {
+      return this.kmHastaCasa(lat, lng);
+    }
   }
 
   cancelar(): void {
@@ -697,6 +977,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
         this.faseViaje = 'vacio';
         this.gpsFallo = false;
         this.okMsg = '';
+        this.limpiarEstadoLocal();
         this.limpiarTick();
       },
       error: (e) => {
@@ -721,7 +1002,6 @@ export class ViajeComponent implements OnInit, OnDestroy {
       tipo: 'recibo',
       totalTxt: dinero(Number(this.recibo.cobro)),
       duracionTxt: duracionLegible(this.recibo.duracionSegundos || 0),
-      slogan: sloganAleatorio(),
     })
       .then((r) => {
         if (r.pegarCaption) {
@@ -770,11 +1050,16 @@ export class ViajeComponent implements OnInit, OnDestroy {
     this.recalcularVivo();
     this.iniciarTick();
     this.iniciarGps();
+    this.persistirViajeEstado();
   }
 
   private recalcularVivo(): void {
     if (!this.tarifa) {
       this.cobroVivo = 0;
+      return;
+    }
+    if (!this.hayViaje && this.cobroFijo != null) {
+      this.cobroVivo = this.totalPago(this.cobroFijo);
       return;
     }
     if (!this.hayViaje && (this.kmCliente == null || this.kmCliente < 0)) {

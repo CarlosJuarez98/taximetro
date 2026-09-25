@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { Estimacion, Lugar, Reserva, ResumenHoy, Tarifa, Viaje } from './modelos';
+import { Estimacion, Lugar, Reserva, ResumenHoy, Tarifa, TarifaFija, Viaje } from './modelos';
 
 @Injectable({ providedIn: 'root' })
 export class ApiService {
@@ -55,6 +55,7 @@ export class ApiService {
     kmManual?: number | null,
     minutosEspera?: number,
     casetas?: number,
+    formaPago?: string,
   ): Observable<Viaje> {
     const body: Record<string, unknown> = { puntos };
     if (kmManual != null && kmManual >= 0) {
@@ -65,6 +66,9 @@ export class ApiService {
     }
     if (casetas != null && casetas > 0) {
       body['casetas'] = casetas;
+    }
+    if (formaPago) {
+      body['formaPago'] = formaPago;
     }
     return this.http.post<Viaje>(`/api/viajes/${id}/corte`, body);
   }
@@ -91,6 +95,29 @@ export class ApiService {
 
   corteCaja(conteoReal: number): Observable<ResumenHoy> {
     return this.http.post<ResumenHoy>('/api/viajes/hoy/corte-caja', { conteoReal });
+  }
+
+  guardarGastos(gasolina: number, otros: number): Observable<ResumenHoy> {
+    return this.http.put<ResumenHoy>('/api/viajes/hoy/gastos', {
+      gastosGasolina: gasolina,
+      gastosOtros: otros,
+    });
+  }
+
+  tarifasFijas(): Observable<TarifaFija[]> {
+    return this.http.get<TarifaFija[]>('/api/tarifas-fijas');
+  }
+
+  crearTarifaFija(dto: TarifaFija): Observable<TarifaFija> {
+    return this.http.post<TarifaFija>('/api/tarifas-fijas', dto);
+  }
+
+  actualizarTarifaFija(id: number, dto: TarifaFija): Observable<TarifaFija> {
+    return this.http.put<TarifaFija>(`/api/tarifas-fijas/${id}`, dto);
+  }
+
+  eliminarTarifaFija(id: number): Observable<{ ok: boolean }> {
+    return this.http.delete<{ ok: boolean }>(`/api/tarifas-fijas/${id}`);
   }
 
   recientes(): Observable<Viaje[]> {

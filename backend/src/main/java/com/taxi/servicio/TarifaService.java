@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.taxi.dto.TarifaDto;
 import com.taxi.modelo.Tarifa;
 import com.taxi.repositorio.TarifaRepository;
+import com.taxi.seguridad.AuthSupport;
 
 import jakarta.annotation.PostConstruct;
 
@@ -15,21 +16,22 @@ import jakarta.annotation.PostConstruct;
 public class TarifaService {
 
     private final TarifaRepository repo;
+    private final AuthSupport auth;
 
-    public TarifaService(TarifaRepository repo) {
+    public TarifaService(TarifaRepository repo, AuthSupport auth) {
         this.repo = repo;
+        this.auth = auth;
     }
 
     @PostConstruct
     void semilla() {
         if (repo.count() == 0) {
-            Tarifa t = new Tarifa();
+            Tarifa t = nuevaDefault(null);
             t.setNombre("Viaja en el Rojo");
             repo.save(t);
             return;
         }
-        // Migra tarifas anteriores a la equilibrada (competitiva, no cara)
-        Tarifa t = actual();
+        Tarifa t = repo.findFirstByUsuarioIdIsNullOrderByIdAsc().orElseGet(() -> repo.findAll().get(0));
         boolean viejaAlta = eq(t.getBanderazo(), "40.00") && eq(t.getPrecioPorKm(), "6.50");
         boolean viejaBaja = eq(t.getBanderazo(), "20.00") && eq(t.getPrecioPorKm(), "4.50");
         if (viejaAlta || viejaBaja) {
@@ -44,9 +46,44 @@ public class TarifaService {
         return v != null && v.compareTo(new BigDecimal(esperado)) == 0;
     }
 
+    /** Tarifa del taxista actual (clona plantilla si es la primera vez). */
     public Tarifa actual() {
-        return repo.findAll().stream().findFirst()
-                .orElseThrow(() -> new IllegalStateException("No hay tarifa configurada"));
+        Long uid = auth.actualId();
+        return repo.findFirstByUsuarioId(uid).orElseGet(() -> clonarPara(uid));
+    }
+
+    private Tarifa clonarPara(Long uid) {
+        Tarifa plantilla = repo.findFirstByUsuarioIdIsNullOrderByIdAsc()
+                .or(() -> repo.findAll().stream().findFirst())
+                .orElseGet(() -> nuevaDefault(null));
+        Tarifa copia = nuevaDefault(uid);
+        copia.setNombre(plantilla.getNombre());
+        copia.setBanderazo(plantilla.getBanderazo());
+        copia.setPrecioPorKm(plantilla.getPrecioPorKm());
+        copia.setPrecioEsperaMinuto(plantilla.getPrecioEsperaMinuto());
+        copia.setTarifaMinima(plantilla.getTarifaMinima());
+        copia.setUmbralEsperaKmh(plantilla.getUmbralEsperaKmh());
+        copia.setRecargoNocturnoPct(plantilla.getRecargoNocturnoPct());
+        copia.setNocheDesdeHora(plantilla.getNocheDesdeHora());
+        copia.setNocheHastaHora(plantilla.getNocheHastaHora());
+        copia.setRedondearPesos(plantilla.isRedondearPesos());
+        return repo.save(copia);
+    }
+
+    private static Tarifa nuevaDefault(Long uid) {
+        Tarifa t = new Tarifa();
+        t.setUsuarioId(uid);
+        t.setNombre("Viaja en el Rojo");
+        t.setBanderazo(new BigDecimal("25.00"));
+        t.setPrecioPorKm(new BigDecimal("5.00"));
+        t.setPrecioEsperaMinuto(new BigDecimal("1.50"));
+        t.setTarifaMinima(new BigDecimal("50.00"));
+        t.setUmbralEsperaKmh(new BigDecimal("12.00"));
+        t.setRecargoNocturnoPct(new BigDecimal("20.00"));
+        t.setNocheDesdeHora(22);
+        t.setNocheHastaHora(6);
+        t.setRedondearPesos(true);
+        return t;
     }
 
     public TarifaDto leer() {
@@ -79,7 +116,7 @@ public class TarifaService {
         }
         t.setNocheDesdeHora(dto.nocheDesdeHora);
         t.setNocheHastaHora(dto.nocheHastaHora);
-        t.setRedondearPesos(true);
+        t.setRedondearPesos(dto.redondearPesos);
         return aDto(repo.save(t));
     }
 
@@ -95,7 +132,7 @@ public class TarifaService {
         dto.recargoNocturnoPct = t.getRecargoNocturnoPct();
         dto.nocheDesdeHora = t.getNocheDesdeHora();
         dto.nocheHastaHora = t.getNocheHastaHora();
-        dto.redondearPesos = true;
+        dto.redondearPesos = t.isRedondearPesos();
         return dto;
     }
 }

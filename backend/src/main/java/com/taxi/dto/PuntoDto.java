@@ -17,5 +17,7 @@ public class PuntoDto {
         public Double minutosEspera;
         /** Total casetas (ida + regreso si aplica) que absorbe el cliente. */
         public Double casetas;
+        /** EFECTIVO o TRANSFER. */
+        public String formaPago;
     }
 }

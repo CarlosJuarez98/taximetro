@@ -36,9 +36,20 @@
         </div>
         <div class="der">
           <button type="button" class="btn btn-seco mini" (click)="resetPass(u)">Clave</button>
-          <button type="button" class="btn mini" [class.btn-peligro]="u.activo" [class.btn-ok]="!u.activo" (click)="toggle(u)">
+          <button
+            type="button"
+            class="btn mini"
+            [class.btn-peligro]="u.activo"
+            [class.btn-ok]="!u.activo"
+            [disabled]="u.activo && !puedeDesactivar(u)"
+            [title]="tituloActivo(u)"
+            (click)="toggle(u)"
+          >
             {{ u.activo ? 'Off' : 'On' }}
           </button>
+          @if (!esYo(u) && !esUnicoAdminActivo(u)) {
+            <button type="button" class="btn btn-peligro mini" (click)="eliminar(u)">Borrar</button>
+          }
         </div>
       </li>
     }

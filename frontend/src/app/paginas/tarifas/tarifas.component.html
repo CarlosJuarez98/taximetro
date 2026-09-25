@@ -37,7 +37,54 @@
         <p class="muted noche-hint">Ejemplo: 22 → 6 y 20% = de 10 pm a 6 am cobras 20% más.</p>
       </div>
 
+      <label class="check">
+        <input type="checkbox" [(ngModel)]="tarifa.redondearPesos" name="redondear" />
+        Redondear total a $5
+      </label>
+
       <button type="submit" class="btn btn-acento" [disabled]="guardando">Guardar tarifa</button>
     </form>
+
+    <div class="card form fijas">
+      <p class="label">Tarifas fijas (Apizaco, etc.)</p>
+      @if (fijas.length) {
+        <ul class="lista-fijas">
+          @for (f of fijas; track f.id) {
+            <li class="fila-fija">
+              <span><strong>{{ f.nombre }}</strong> · {{ cobroTxt(f.cobro) }}@if (f.km) { · {{ f.km }} km}</span>
+              <span class="acciones-fija">
+                <button type="button" class="btn btn-seco mini" (click)="editarFija(f)">Editar</button>
+                <button type="button" class="btn btn-peligro mini" (click)="borrarFija(f)">×</button>
+              </span>
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="muted">Sin tarifas fijas. Agrega una abajo.</p>
+      }
+
+      <label>Nombre
+        <input [(ngModel)]="fijaNueva.nombre" name="fNombre" placeholder="ej. Apizaco centro" />
+      </label>
+      <div class="dos">
+        <label>Cobro $
+          <input type="number" step="1" min="0" [(ngModel)]="fijaNueva.cobro" name="fCobro" />
+        </label>
+        <label>Km ref.
+          <input type="number" step="0.1" min="0" [(ngModel)]="fijaNueva.km" name="fKm" placeholder="opc." />
+        </label>
+      </div>
+      <label>Notas
+        <input [(ngModel)]="fijaNueva.notas" name="fNotas" placeholder="opcional" />
+      </label>
+      <div class="acciones-form">
+        <button type="button" class="btn btn-acento mini" (click)="guardarFija()" [disabled]="guardando">
+          {{ editId != null ? 'Actualizar' : 'Agregar' }}
+        </button>
+        @if (editId != null) {
+          <button type="button" class="btn btn-seco mini" (click)="limpiarFijaForm()">Cancelar</button>
+        }
+      </div>
+    </div>
   }
 </section>

@@ -16,6 +16,28 @@
         <span>{{ resumen.km }} km</span>
         <span>{{ resumen.minutos }} min</span>
       </div>
+      <div class="stats desglose-pago">
+        <span>Efectivo {{ efectivoTxt() }}</span>
+        <span>Transfer {{ transferTxt() }}</span>
+        <span>Neto {{ netoTxt() }}</span>
+      </div>
+    </div>
+
+    <div class="card gastos">
+      <p class="label">Gastos del día</p>
+      <div class="caja-fila">
+        <label class="campo">
+          Gasolina $
+          <input type="number" inputmode="decimal" min="0" step="1" [(ngModel)]="gastosGasEdit" name="gas" />
+        </label>
+        <label class="campo">
+          Otros $
+          <input type="number" inputmode="decimal" min="0" step="1" [(ngModel)]="gastosOtrosEdit" name="otros" />
+        </label>
+        <button type="button" class="btn btn-seco mini" (click)="guardarGastos()" [disabled]="guardando">
+          Guardar
+        </button>
+      </div>
     </div>
 
     <div class="card caja">

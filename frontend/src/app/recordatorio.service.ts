@@ -35,7 +35,7 @@ export class RecordatorioService {
     if (this.arrancado) return;
     this.arrancado = true;
     this.checar();
-    this.timer = setInterval(() => this.checar(), 25_000);
+    this.timer = setInterval(() => this.checar(), 15_000);
   }
 
   stop(): void {
@@ -72,23 +72,31 @@ export class RecordatorioService {
   private revisarLista(lista: Reserva[]): void {
     const ahora = Date.now();
     const margen = this.minutosAntes * 60_000;
+    const margen2 = 2 * 60_000;
     const shown = this.leidos();
 
     for (const r of lista) {
       if (!r.id || r.estado !== 'RESERVADA') continue;
       const cuando = new Date(r.cuando).getTime();
       if (Number.isNaN(cuando)) continue;
-      // Ventana: desde (viaje - N min) hasta el viaje
+
+      const key2 = `${r.id}@2m@${r.cuando}`;
+      if (ahora >= cuando - margen2 && ahora < cuando && !shown.has(key2)) {
+        this.mostrar(r, 2);
+        shown.add(key2);
+        this.guardarLeidos(shown);
+      }
+
       if (ahora < cuando - margen || ahora >= cuando) continue;
       const key = `${r.id}@${r.cuando}`;
       if (shown.has(key)) continue;
-      this.mostrar(r);
+      this.mostrar(r, this.minutosAntes);
       shown.add(key);
       this.guardarLeidos(shown);
     }
   }
 
-  private mostrar(r: Reserva): void {
+  private mostrar(r: Reserva, mins: number): void {
     const hora = new Date(r.cuando).toLocaleTimeString('es-MX', {
       hour: '2-digit',
       minute: '2-digit',
@@ -98,9 +106,9 @@ export class RecordatorioService {
       ? `${r.cliente} · ${dest} · ${hora}`
       : `${r.cliente} · ${hora}`;
     try {
-      const n = new Notification('Viaje en ~' + this.minutosAntes + ' min', {
+      const n = new Notification('Viaje en ~' + mins + ' min', {
         body,
-        tag: `reserva-${r.id}`,
+        tag: mins === 2 ? `reserva-2m-${r.id}` : `reserva-${r.id}`,
         icon: '/logo.png',
       });
       n.onclick = () => {

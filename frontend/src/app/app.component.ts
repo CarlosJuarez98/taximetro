@@ -1,5 +1,5 @@
-import { AsyncPipe } from '@angular/common';
 import { Component, OnInit, inject } from '@angular/core';
+import { AsyncPipe } from '@angular/common';
 import {
   NavigationCancel,
   NavigationEnd,
@@ -13,6 +13,7 @@ import {
 import { AuthService } from './auth.service';
 import { FeedbackService } from './feedback.service';
 import { RecordatorioService } from './recordatorio.service';
+import { OfflineQueueService } from './offline-queue.service';
 
 @Component({
   selector: 'app-root',
@@ -25,6 +26,7 @@ export class AppComponent implements OnInit {
   private readonly auth = inject(AuthService);
   private readonly router = inject(Router);
   private readonly avisos = inject(RecordatorioService);
+  private readonly offline = inject(OfflineQueueService);
   readonly feedback = inject(FeedbackService);
 
   esLogin = false;
@@ -66,11 +68,14 @@ export class AppComponent implements OnInit {
       this.nombre = m?.nombre || m?.username || '';
       if (m?.authenticated && this.avisos.activo) {
         this.avisos.start();
+        this.offline.flush();
       } else if (!m?.authenticated) {
         this.avisos.stop();
       }
     });
     this.auth.me().subscribe();
+    this.offline.flush();
+    window.addEventListener('online', () => this.offline.flush());
   }
 
   onDockClick(): void {

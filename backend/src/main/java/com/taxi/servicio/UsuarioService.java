@@ -40,14 +40,14 @@ public class UsuarioService {
             repo.save(admin);
             return;
         }
-        // Asegura la clave conocida si el hash quedó mal / vacío
+        // Solo repara hash vacío; nunca pisa una clave que el admin ya cambió
         Usuario admin = opt.get();
-        if (admin.getPasswordHash() == null
-                || admin.getPasswordHash().isBlank()
-                || !encoder.matches("1Taxi23", admin.getPasswordHash())) {
+        if (admin.getPasswordHash() == null || admin.getPasswordHash().isBlank()) {
             admin.setPasswordHash(encoder.encode("1Taxi23"));
             admin.setActivo(true);
-            admin.setRol(Usuario.Rol.ADMIN);
+            if (admin.getRol() == null) {
+                admin.setRol(Usuario.Rol.ADMIN);
+            }
             repo.save(admin);
         }
     }
@@ -91,8 +91,7 @@ public class UsuarioService {
         if (dto.rol != null && !dto.rol.isBlank()) {
             // No quitar el último admin
             if (u.getRol() == Usuario.Rol.ADMIN && parseRol(dto.rol) != Usuario.Rol.ADMIN) {
-                long admins = repo.findAll().stream().filter(x -> x.getRol() == Usuario.Rol.ADMIN && x.isActivo()).count();
-                if (admins <= 1) {
+                if (contarAdminsActivos() <= 1) {
                     throw new IllegalArgumentException("Debe quedar al menos un admin");
                 }
             }
@@ -108,14 +107,30 @@ public class UsuarioService {
     public UsuarioDto setActivo(Long id, boolean activo) {
         Usuario u = repo.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
-        if (!activo && u.getRol() == Usuario.Rol.ADMIN) {
-            long admins = repo.findAll().stream().filter(x -> x.getRol() == Usuario.Rol.ADMIN && x.isActivo()).count();
-            if (admins <= 1) {
-                throw new IllegalArgumentException("No puedes desactivar el único admin");
-            }
+        if (!activo && u.getRol() == Usuario.Rol.ADMIN && contarAdminsActivos() <= 1) {
+            throw new IllegalArgumentException("No puedes desactivar el único admin");
         }
         u.setActivo(activo);
         return UsuarioDto.de(repo.save(u));
+    }
+
+    @Transactional
+    public void eliminar(Long id, String actorUsername) {
+        Usuario u = repo.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario no encontrado"));
+        if (actorUsername != null && u.getUsername().equalsIgnoreCase(actorUsername.trim())) {
+            throw new IllegalArgumentException("No puedes eliminar tu propio usuario");
+        }
+        if (u.getRol() == Usuario.Rol.ADMIN && u.isActivo() && contarAdminsActivos() <= 1) {
+            throw new IllegalArgumentException("No se puede eliminar: es el único admin");
+        }
+        repo.delete(u);
+    }
+
+    private long contarAdminsActivos() {
+        return repo.findAll().stream()
+                .filter(x -> x.getRol() == Usuario.Rol.ADMIN && x.isActivo())
+                .count();
     }
 
     private void validarAlta(UsuarioDto dto) {

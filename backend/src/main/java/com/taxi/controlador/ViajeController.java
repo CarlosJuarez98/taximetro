@@ -64,6 +64,20 @@ public class ViajeController {
         return servicio.corteCaja(conteo);
     }
 
+    @PutMapping("/hoy/gastos")
+    public ResumenHoyDto gastos(@RequestBody Map<String, Object> body) {
+        java.math.BigDecimal gas = decimal(body, "gastosGasolina");
+        java.math.BigDecimal otros = decimal(body, "gastosOtros");
+        return servicio.guardarGastos(gas, otros);
+    }
+
+    private static java.math.BigDecimal decimal(Map<String, Object> body, String key) {
+        if (body == null || body.get(key) == null) {
+            return java.math.BigDecimal.ZERO;
+        }
+        return new java.math.BigDecimal(String.valueOf(body.get(key)));
+    }
+
     @GetMapping
     public List<ViajeDto> recientes() {
         return servicio.recientes();

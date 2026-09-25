@@ -1,6 +1,7 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
+import { AuthService } from '../../auth.service';
 
 interface UsuarioRow {
   id: number;
@@ -19,6 +20,7 @@ interface UsuarioRow {
 })
 export class UsuariosComponent implements OnInit {
   private readonly http = inject(HttpClient);
+  private readonly auth = inject(AuthService);
 
   lista: UsuarioRow[] = [];
   error = '';
@@ -41,6 +43,37 @@ export class UsuariosComponent implements OnInit {
       next: (l) => (this.lista = l || []),
       error: () => (this.error = 'No se pudieron cargar los usuarios.'),
     });
+  }
+
+  adminsActivos(): number {
+    return this.lista.filter((u) => u.activo && String(u.rol).toUpperCase() === 'ADMIN').length;
+  }
+
+  esUnicoAdminActivo(u: UsuarioRow): boolean {
+    return (
+      u.activo &&
+      String(u.rol).toUpperCase() === 'ADMIN' &&
+      this.adminsActivos() <= 1
+    );
+  }
+
+  esYo(u: UsuarioRow): boolean {
+    const yo = this.auth.username;
+    return !!yo && yo.toLowerCase() === (u.username || '').toLowerCase();
+  }
+
+  puedeDesactivar(u: UsuarioRow): boolean {
+    if (!u.activo) return true;
+    if (this.esUnicoAdminActivo(u)) return false;
+    return true;
+  }
+
+  tituloActivo(u: UsuarioRow): string {
+    if (!u.activo) return 'Activar';
+    if (this.esUnicoAdminActivo(u)) {
+      return 'No se puede desactivar: es el único admin';
+    }
+    return 'Desactivar';
   }
 
   crear(): void {
@@ -74,6 +107,12 @@ export class UsuariosComponent implements OnInit {
   }
 
   toggle(u: UsuarioRow): void {
+    this.error = '';
+    this.ok = '';
+    if (u.activo && !this.puedeDesactivar(u)) {
+      this.error = this.tituloActivo(u);
+      return;
+    }
     this.http.post<UsuarioRow>(`/api/usuarios/${u.id}/activo`, { activo: !u.activo }).subscribe({
       next: () => this.cargar(),
       error: (e) => (this.error = e?.error?.error || 'No se pudo cambiar.'),
@@ -86,6 +125,27 @@ export class UsuariosComponent implements OnInit {
     this.http.put<UsuarioRow>(`/api/usuarios/${u.id}`, { password: pass }).subscribe({
       next: () => (this.ok = `Contraseña de ${u.username} actualizada.`),
       error: (e) => (this.error = e?.error?.error || 'No se pudo cambiar la clave.'),
+    });
+  }
+
+  eliminar(u: UsuarioRow): void {
+    this.error = '';
+    this.ok = '';
+    if (this.esUnicoAdminActivo(u)) {
+      this.error = 'No se puede eliminar: es el único admin.';
+      return;
+    }
+    if (this.esYo(u)) {
+      this.error = 'No puedes eliminar tu propio usuario.';
+      return;
+    }
+    if (!confirm(`¿Eliminar a «${u.nombre || u.username}»?`)) return;
+    this.http.delete<{ ok?: boolean }>(`/api/usuarios/${u.id}`).subscribe({
+      next: () => {
+        this.ok = `Usuario ${u.username} eliminado.`;
+        this.cargar();
+      },
+      error: (e) => (this.error = e?.error?.error || 'No se pudo eliminar.'),
     });
   }
 }

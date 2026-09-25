@@ -150,6 +150,12 @@
           }
         </div>
         <div class="der">
+          @if (telHref(r.telefono); as tel) {
+            <a class="btn btn-seco mini" [href]="tel">Llamar</a>
+          }
+          @if (waHref(r.telefono); as wa) {
+            <a class="btn btn-seco mini" [href]="wa" target="_blank" rel="noopener">WA</a>
+          }
           @if (!r.conflicto) {
             <button type="button" class="btn btn-acento mini" (click)="confirmar(r)">Confirmar</button>
           }
@@ -181,6 +187,13 @@
           </p>
         </div>
         <div class="der">
+          @if (telHref(r.telefono); as tel) {
+            <a class="btn btn-seco mini" [href]="tel">Llamar</a>
+          }
+          @if (waHref(r.telefono); as wa) {
+            <a class="btn btn-seco mini" [href]="wa" target="_blank" rel="noopener">WA</a>
+          }
+          <button type="button" class="btn btn-acento mini" (click)="iniciarViaje(r)">Iniciar</button>
           <button type="button" class="btn btn-ok mini" (click)="marcarHecha(r)">Hecha</button>
           <button type="button" class="btn btn-peligro mini" (click)="cancelarReserva(r)">Cancelar</button>
         </div>

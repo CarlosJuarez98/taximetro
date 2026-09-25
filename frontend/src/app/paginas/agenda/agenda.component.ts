@@ -5,7 +5,7 @@ import { ApiService } from '../../api.service';
 import { FechaHoraPickerComponent } from '../../fecha-hora-picker/fecha-hora-picker.component';
 import { SugerenciaCampoComponent } from '../../sugerencia-campo.component';
 import { RecordatorioService } from '../../recordatorio.service';
-import { RESERVA_BORRADOR_KEY, Reserva, ReservaBorrador } from '../../modelos';
+import { RESERVA_BORRADOR_KEY, Reserva, ReservaBorrador, DESDE_RESERVA_KEY } from '../../modelos';
 import { dinero } from '../../cobro.util';
 
 @Component({
@@ -247,6 +247,31 @@ export class AgendaComponent implements OnInit {
 
   cobroTxt(r: Reserva): string {
     return dinero(Number(r.cobroEstimado || 0));
+  }
+
+  iniciarViaje(r: Reserva): void {
+    if (!r.id) return;
+    sessionStorage.setItem(DESDE_RESERVA_KEY, JSON.stringify(r));
+    void this.router.navigate(['/viaje'], { queryParams: { reserva: r.id } });
+  }
+
+  telHref(t?: string | null): string | null {
+    const d = this.digitosTel(t);
+    return d ? `tel:+${d}` : null;
+  }
+
+  waHref(t?: string | null): string | null {
+    const d = this.digitosTel(t);
+    return d ? `https://wa.me/${d}` : null;
+  }
+
+  private digitosTel(t?: string | null): string {
+    if (!t) return '';
+    let d = t.replace(/\D/g, '');
+    if (d.length === 10) d = '52' + d;
+    if (d.length === 12 && d.startsWith('52')) return d;
+    if (d.length > 10 && d.startsWith('521')) d = '52' + d.slice(3);
+    return d.length >= 11 ? d : '';
   }
 
   cuandoTxt(r: Reserva): string {
