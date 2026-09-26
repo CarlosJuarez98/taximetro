@@ -39,6 +39,8 @@ docker restart productos-limpieza-caddy
 powershell -ExecutionPolicy Bypass -File .\scripts\backup-h2.ps1
 ```
 
+Cookie Secure en nube: `SERVER_SERVLET_SESSION_COOKIE_SECURE=true` en `.env.cloud`.
+
 ## URL
 
 https://taxi.163.192.146.143.sslip.io/

@@ -1,0 +1,16 @@
+---
+description: Ramas local vs prod + datos (código ≠ datos)
+alwaysApply: true
+---
+
+# Ramas `local` y `prod`
+
+- **Rama por defecto de trabajo:** `local` (dev diario: H2 local, Angular `:4203`, `iniciar.bat` / `dev.bat`).
+- **Rama de despliegue OCI:** `prod` (compose cloud, `/api` relativo, HTTPS Caddy).
+- Cuando el usuario diga **"sube a la nube"**:
+  1. Integrar: merge `local` → `prod` (solo lo que falte en `prod`).
+  2. Desplegar código con `scripts/deploy-nube.ps1`.
+  3. **No** sincronizar datos (local es sandbox; la nube manda en datos reales).
+- Datos: H2 en volumen Docker. Backup con `scripts/backup-h2.ps1`. ATP cuando se pida.
+- Preferencia (igual en los 4 repos): bajar/respaldar de la nube; no contaminar prod con pruebas locales.
+- Convenio: `A:\Programas-java\SYNC-BIDIRECCIONAL.md`. Ver `BRANCHES.md`, `DEPLOY-NUBE.md`.
