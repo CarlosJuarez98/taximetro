@@ -78,13 +78,16 @@ export class AuthService {
     return this.meInflight$;
   }
 
-  login(username: string, password: string): Observable<void> {
+  login(username: string, password: string, recordar = false): Observable<void> {
     return this.http
-      .post<{ ok: boolean; username: string; nombre?: string; rol?: string; usuarioId?: number }>(
-        '/api/auth/login',
-        { username, password },
-        { withCredentials: true },
-      )
+      .post<{
+        ok: boolean;
+        username: string;
+        nombre?: string;
+        rol?: string;
+        usuarioId?: number;
+        recordar?: boolean;
+      }>('/api/auth/login', { username, password, recordar }, { withCredentials: true })
       .pipe(
         tap((r) => {
           this.persist({
@@ -97,6 +100,14 @@ export class AuthService {
         }),
         map(() => undefined),
       );
+  }
+
+  cambiarPassword(actual: string, nueva: string): Observable<{ ok: boolean }> {
+    return this.http.put<{ ok: boolean }>(
+      '/api/auth/password',
+      { actual, nueva },
+      { withCredentials: true },
+    );
   }
 
   logout(): Observable<void> {

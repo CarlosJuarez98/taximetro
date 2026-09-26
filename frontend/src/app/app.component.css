@@ -35,6 +35,70 @@
   min-height: 2rem;
 }
 
+.top-acciones {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex: 0 0 auto;
+}
+
+.pwd-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.pwd-card {
+  width: min(100%, 18rem);
+  display: grid;
+  gap: 0.55rem;
+  padding: 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--linea);
+  background: #121216;
+  color: #fff;
+}
+
+.pwd-card h2 {
+  margin: 0;
+  font-family: Oswald, sans-serif;
+  font-size: 1.05rem;
+}
+
+.pwd-card label {
+  display: grid;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--texto-suave);
+}
+
+.pwd-card input {
+  border: 1px solid var(--linea);
+  border-radius: 0.45rem;
+  background: #0a0a0c;
+  color: #fff;
+  padding: 0.45rem 0.55rem;
+  font-size: 0.9rem;
+}
+
+.pwd-error {
+  margin: 0;
+  color: #ff8a95;
+  font-size: 0.78rem;
+}
+
+.pwd-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-top: 0.2rem;
+}
+
 .brand {
   display: flex;
   align-items: center;

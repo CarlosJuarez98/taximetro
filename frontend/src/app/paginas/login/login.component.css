@@ -44,3 +44,18 @@ label {
   margin-top: 0.15rem;
   min-height: 2.5rem;
 }
+
+.check.recordar {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--texto-suave);
+  text-align: left;
+}
+
+.check.recordar input {
+  width: auto;
+  margin: 0;
+}

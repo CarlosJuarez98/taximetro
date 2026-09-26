@@ -1,5 +1,6 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { AsyncPipe } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import {
   NavigationCancel,
   NavigationEnd,
@@ -18,7 +19,7 @@ import { OfflineQueueService } from './offline-queue.service';
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, AsyncPipe],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, AsyncPipe, FormsModule],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css',
 })
@@ -35,6 +36,12 @@ export class AppComponent implements OnInit {
   esAdmin = false;
   nombre = '';
   navBusy = false;
+
+  pwdDialogAbierto = false;
+  pwdActual = '';
+  pwdNueva = '';
+  pwdError = '';
+  pwdCargando = false;
 
   readonly links = [
     { path: '/viaje', label: 'Viaje', icon: '▣' },
@@ -94,6 +101,51 @@ export class AppComponent implements OnInit {
       base.push({ path: '/usuarios', label: 'Users', icon: '◎' });
     }
     return base;
+  }
+
+  abrirCambioPassword(): void {
+    this.pwdActual = '';
+    this.pwdNueva = '';
+    this.pwdError = '';
+    this.pwdDialogAbierto = true;
+  }
+
+  cerrarCambioPassword(): void {
+    this.pwdDialogAbierto = false;
+    this.pwdActual = '';
+    this.pwdNueva = '';
+    this.pwdError = '';
+  }
+
+  enviarCambioPassword(): void {
+    this.pwdError = '';
+    if (!this.pwdActual || !this.pwdNueva) {
+      this.pwdError = 'Escribe la contraseña actual y la nueva';
+      return;
+    }
+    if (this.pwdNueva.length < 8) {
+      this.pwdError = 'La nueva contraseña debe tener al menos 8 caracteres';
+      return;
+    }
+    this.pwdCargando = true;
+    this.auth.cambiarPassword(this.pwdActual, this.pwdNueva).subscribe({
+      next: () => {
+        this.pwdCargando = false;
+        this.cerrarCambioPassword();
+        this.feedback.start('Contraseña actualizada');
+        setTimeout(() => this.feedback.stop(), 1200);
+      },
+      error: (err) => {
+        this.pwdCargando = false;
+        const body = err?.error;
+        const msg =
+          (typeof body === 'object' && body?.error) ||
+          (typeof body === 'string' ? body : null) ||
+          err?.message;
+        this.pwdError =
+          typeof msg === 'string' && msg.length < 160 ? msg : 'No se pudo cambiar la contraseña';
+      },
+    });
   }
 
   salir(): void {

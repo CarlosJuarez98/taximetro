@@ -13,7 +13,12 @@
         </div>
       </div>
       @if (sesionActiva) {
-        <button type="button" class="btn-salir" (click)="salir()">Salir</button>
+        <div class="top-acciones">
+          <button type="button" class="btn-salir" (click)="abrirCambioPassword()" title="Cambiar contraseña">
+            Clave
+          </button>
+          <button type="button" class="btn-salir" (click)="salir()">Salir</button>
+        </div>
       }
     </header>
 
@@ -38,5 +43,32 @@
         </a>
       }
     </nav>
+  </div>
+}
+
+@if (pwdDialogAbierto) {
+  <div class="pwd-overlay" role="dialog" aria-modal="true" aria-labelledby="pwd-title">
+    <form class="pwd-card" (ngSubmit)="enviarCambioPassword()">
+      <h2 id="pwd-title">Cambiar contraseña</h2>
+      <label>
+        Actual
+        <input type="password" name="pwdActual" [(ngModel)]="pwdActual" autocomplete="current-password" required />
+      </label>
+      <label>
+        Nueva
+        <input type="password" name="pwdNueva" [(ngModel)]="pwdNueva" autocomplete="new-password" required />
+      </label>
+      @if (pwdError) {
+        <p class="pwd-error">{{ pwdError }}</p>
+      }
+      <div class="pwd-actions">
+        <button type="button" class="btn-salir" (click)="cerrarCambioPassword()" [disabled]="pwdCargando">
+          Cancelar
+        </button>
+        <button type="submit" class="btn btn-acento" [disabled]="pwdCargando">
+          {{ pwdCargando ? 'Guardando…' : 'Guardar' }}
+        </button>
+      </div>
+    </form>
   </div>
 }

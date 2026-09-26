@@ -33,3 +33,7 @@ services:
 volumes:
   taximetro-h2:
     name: taximetro-h2-data
+
+networks:
+  default:
+    name: taximetro_default

@@ -16,6 +16,7 @@ export class LoginComponent {
 
   username = '';
   password = '';
+  recordar = false;
   error = '';
   cargando = false;
 
@@ -27,13 +28,17 @@ export class LoginComponent {
       return;
     }
     this.cargando = true;
-    this.auth.login(u, this.password).subscribe({
+    this.auth.login(u, this.password, this.recordar).subscribe({
       next: () => {
         this.cargando = false;
         void this.router.navigateByUrl('/viaje');
       },
-      error: () => {
+      error: (err) => {
         this.cargando = false;
+        if (err?.status === 429) {
+          this.error = 'Demasiados intentos. Espera unos minutos.';
+          return;
+        }
         this.error = 'Usuario o contraseña incorrectos';
       },
     });

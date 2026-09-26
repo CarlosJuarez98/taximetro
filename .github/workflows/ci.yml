@@ -1,0 +1,46 @@
+name: ci
+
+on:
+  push:
+    branches: [local, prod]
+  pull_request:
+    branches: [local, prod]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: maven
+      - run: mvn -B test
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npx ng build --configuration=production
+
+  health-doc:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Health endpoint exists
+        run: |
+          grep -q 'RequestMapping("/api/health")' backend/src/main/java/com/taxi/controlador/HealthController.java
+          grep -q '/api/health' backend/src/main/java/com/taxi/config/SecurityConfig.java

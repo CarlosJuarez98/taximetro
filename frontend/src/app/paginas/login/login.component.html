@@ -12,6 +12,10 @@
       Contraseña
       <input type="password" name="password" [(ngModel)]="password" autocomplete="current-password" required />
     </label>
+    <label class="check recordar">
+      <input type="checkbox" [(ngModel)]="recordar" name="recordar" />
+      Recordarme 7 días
+    </label>
 
     @if (error) {
       <p class="error">{{ error }}</p>
