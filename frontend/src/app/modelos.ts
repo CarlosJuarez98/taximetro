@@ -118,8 +118,9 @@ export const RESERVA_BORRADOR_KEY = 'viaja_reserva_borrador';
 export const VIAJE_ESTADO_KEY = 'viaja_viaje_estado';
 
 export interface ViajeEstadoLocal {
-  fase: 'vacio' | 'con_cliente';
+  fase: 'vacio' | 'con_cliente' | 'elige_regreso' | 'regreso_cliente' | 'listo_cobro';
   kmCliente: number | null;
+  kmClienteBase?: number;
   kmVacioIda: number;
   kmVacioRegreso: number;
   modos: {

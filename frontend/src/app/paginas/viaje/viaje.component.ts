@@ -29,6 +29,14 @@ type MotivoEspera = 'cliente' | 'trafico';
 type Proporcion = 'nada' | 'mitad' | 'completo';
 /** Cotizar para ahora, de día o de noche (otro día / otra hora). */
 type ModoHorario = 'ahora' | 'dia' | 'noche';
+/**
+ * vacio = vas por el cliente
+ * con_cliente = ida con él
+ * elige_regreso = ya lo dejaste; elige vacío o con cliente
+ * regreso_cliente = vuelta con él
+ * listo_cobro = listo para cortar
+ */
+type FaseViaje = 'vacio' | 'con_cliente' | 'elige_regreso' | 'regreso_cliente' | 'listo_cobro';
 
 @Component({
   selector: 'app-viaje',
@@ -93,8 +101,11 @@ export class ViajeComponent implements OnInit, OnDestroy {
   /**
    * vacio = saliste de base / vas por el cliente (GPS → vacío ida).
    * con_cliente = ya lo subiste (GPS → km cobrables con él).
+   * elige_regreso / regreso_cliente / listo_cobro = post destino.
    */
-  faseViaje: 'vacio' | 'con_cliente' = 'vacio';
+  faseViaje: FaseViaje = 'vacio';
+  /** Km con cliente al momento del primer “ya dejé” (base para la vuelta). */
+  private kmClienteBase = 0;
 
   /** Reserva de agenda ligada al viaje actual. */
   reservaIdActiva?: number;
@@ -104,6 +115,16 @@ export class ViajeComponent implements OnInit, OnDestroy {
   destinoBusqueda = '';
   lugaresBusqueda: Lugar[] = [];
   buscandoGeo = false;
+  estimandoRuta = false;
+  /** Origen/destino de la última ruta estimada (Maps + vacío). */
+  rutaOrigen: { lat: number; lng: number } | null = null;
+  rutaDestino: Lugar | null = null;
+  /** Km de ida con cliente (una vía). */
+  kmIdaRuta = 0;
+  /** Cliente paga ida + vuelta al mismo punto. */
+  viajeRedondo = false;
+  private geoDebounce?: ReturnType<typeof setTimeout>;
+  private geoBusquedaSeq = 0;
 
   esperaMotivo: MotivoEspera | null = null;
   private esperaAcumuladaSeg = 0;
@@ -143,16 +164,40 @@ export class ViajeComponent implements OnInit, OnDestroy {
     return this.hayViaje && this.faseViaje === 'vacio';
   }
 
-  /** Cliente a bordo. */
+  /** Cliente a bordo (ida o vuelta). */
   get conClienteABordo(): boolean {
-    return this.hayViaje && this.faseViaje === 'con_cliente';
+    return this.hayViaje && (this.faseViaje === 'con_cliente' || this.faseViaje === 'regreso_cliente');
+  }
+
+  get eligiendoRegreso(): boolean {
+    return this.hayViaje && this.faseViaje === 'elige_regreso';
+  }
+
+  get listoCobrar(): boolean {
+    return this.hayViaje && this.faseViaje === 'listo_cobro';
   }
 
   get etiquetaViaje(): string {
     if (!this.hayViaje) return 'Taxímetro';
     if (this.esperando) return this.motivoEsperaTxt;
     if (this.yendoPorCliente) return 'Por el cliente';
+    if (this.faseViaje === 'elige_regreso') return '¿Cómo regresas?';
+    if (this.faseViaje === 'regreso_cliente') return 'Vuelta con cliente';
+    if (this.faseViaje === 'listo_cobro') return 'Listo para cobrar';
     return 'Con cliente';
+  }
+
+  /** Preview del cobro en listo_cobro / elige. */
+  get cobroPreviewTxt(): string {
+    if (!this.tarifa || this.kmCliente == null || this.kmCliente < 0) return '—';
+    const r = calcularCobroPorKm(
+      this.tarifa,
+      this.kmCobrables,
+      this.minEsperaCobro,
+      this.inicioMs || Date.now(),
+      null,
+    );
+    return dinero(this.totalPago(r.cobro));
   }
 
   get esNocturno(): boolean {
@@ -238,17 +283,28 @@ export class ViajeComponent implements OnInit, OnDestroy {
     }
     const partes: string[] = [];
     const con = Math.max(0, Number(this.kmCliente) || 0);
-    if (con > 0) partes.push(`con cliente ${con} km`);
+    if (con > 0) {
+      if (this.viajeRedondo && this.kmIdaRuta > 0) {
+        partes.push(`ida+vuelta ${con} km (${this.kmIdaRuta}×2)`);
+      } else {
+        partes.push(`con cliente ${con} km`);
+      }
+    }
     const ida = Math.max(0, Number(this.kmVacioIda) || 0);
     if (ida > 0) {
       partes.push(`vacío ida ${ida} km × ${this.pctDe(this.modoVacioIda)}%`);
     }
     const reg = Math.max(0, Number(this.kmVacioRegreso) || 0);
     if (reg > 0) {
-      partes.push(`vacío a casa ${reg} km × ${this.pctDe(this.modoVacioRegreso)}%`);
+      const etiqueta = this.viajeRedondo ? 'vacío (punto→casa)' : 'vacío a casa';
+      partes.push(`${etiqueta} ${reg} km × ${this.pctDe(this.modoVacioRegreso)}%`);
     }
     if (!partes.length) return '';
     return `${partes.join(' · ')} → cobras ${this.kmCobrables} km`;
+  }
+
+  get puedeAbrirMaps(): boolean {
+    return !!(this.rutaDestino && this.rutaDestino.lat != null && this.rutaDestino.lng != null);
   }
 
   get desgloseCasetas(): string {
@@ -388,49 +444,170 @@ export class ViajeComponent implements OnInit, OnDestroy {
     this.recalcularVivo();
   }
 
-  buscarDestino(): void {
+  /** Mientras escribe: sugiere lugares (debounce). */
+  onDestinoBusquedaChange(q: string): void {
+    this.destinoBusqueda = q;
+    if (this.geoDebounce) clearTimeout(this.geoDebounce);
+    const t = (q || '').trim();
+    if (t.length < 2) {
+      this.lugaresBusqueda = [];
+      this.buscandoGeo = false;
+      return;
+    }
+    this.geoDebounce = setTimeout(() => this.buscarDestino(true), 280);
+  }
+
+  buscarDestino(silencioso = false): void {
     const q = this.destinoBusqueda.trim();
-    if (q.length < 3) return;
+    if (q.length < 2) {
+      this.lugaresBusqueda = [];
+      return;
+    }
+    if (this.geoDebounce) {
+      clearTimeout(this.geoDebounce);
+      this.geoDebounce = undefined;
+    }
+    const seq = ++this.geoBusquedaSeq;
     this.buscandoGeo = true;
     this.api.buscar(q).subscribe({
       next: (r) => {
+        if (seq !== this.geoBusquedaSeq) return;
         this.buscandoGeo = false;
         this.lugaresBusqueda = r.lugares || [];
+        if (!silencioso && !this.lugaresBusqueda.length) {
+          this.error = 'Sin resultados. Prueba otro nombre.';
+        }
       },
       error: () => {
+        if (seq !== this.geoBusquedaSeq) return;
         this.buscandoGeo = false;
         this.lugaresBusqueda = [];
+        if (!silencioso) this.error = 'No se pudo buscar el destino.';
       },
     });
   }
 
   elegirLugar(l: Lugar): void {
+    if (this.geoDebounce) {
+      clearTimeout(this.geoDebounce);
+      this.geoDebounce = undefined;
+    }
+    this.geoBusquedaSeq++;
     this.lugaresBusqueda = [];
+    this.buscandoGeo = false;
     this.destinoBusqueda = l.etiqueta;
     this.destinoCotiza = l.etiqueta;
+    this.rutaDestino = l;
+    // Origen provisional para abrir Maps en el mismo toque (si no, el navegador bloquea el popup)
+    this.rutaOrigen =
+      this.lastLat != null && this.lastLng != null
+        ? { lat: this.lastLat, lng: this.lastLng }
+        : { lat: HUAMANTLA.lat, lng: HUAMANTLA.lng };
+    this.abrirEnMaps();
     void this.estimarKmHasta(l);
   }
 
+  setViajeRedondo(on: boolean): void {
+    this.viajeRedondo = on;
+    if (on) {
+      this.modoRegreso = 'completo';
+    }
+    if (this.kmIdaRuta > 0) {
+      this.aplicarKmSegunTipoViaje();
+      void this.calcularVacíoTrasRuta();
+    }
+  }
+
+  abrirEnMaps(): void {
+    if (!this.rutaDestino) {
+      this.error = 'Primero busca y elige un destino.';
+      return;
+    }
+    const o = this.rutaOrigen || HUAMANTLA;
+    const d = this.rutaDestino;
+    let url: string;
+    if (this.viajeRedondo) {
+      // Ida al destino y vuelta al origen
+      url =
+        `https://www.google.com/maps/dir/?api=1` +
+        `&origin=${o.lat},${o.lng}` +
+        `&destination=${o.lat},${o.lng}` +
+        `&waypoints=${d.lat},${d.lng}` +
+        `&travelmode=driving`;
+    } else {
+      url =
+        `https://www.google.com/maps/dir/?api=1` +
+        `&origin=${o.lat},${o.lng}` +
+        `&destination=${d.lat},${d.lng}` +
+        `&travelmode=driving`;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  private aplicarKmSegunTipoViaje(): void {
+    const ida = Math.max(0, this.kmIdaRuta);
+    this.kmCliente = this.viajeRedondo ? Math.round(ida * 2 * 10) / 10 : ida;
+    this.cobroFijo = null;
+    this.onKmChange();
+  }
+
+  private async calcularVacíoTrasRuta(): Promise<void> {
+    if (!this.casaLista && !this.leerCasaRaw()) {
+      return;
+    }
+    // Ida y vuelta: vacío es del punto de recogida a casa.
+    // Solo ida: vacío es del destino a casa.
+    const from =
+      this.viajeRedondo && this.rutaOrigen
+        ? this.rutaOrigen
+        : this.rutaDestino
+          ? { lat: this.rutaDestino.lat, lng: this.rutaDestino.lng }
+          : null;
+    if (!from) return;
+    this.kmVacioRegreso = await this.estimarKmVacioRegreso(from.lat, from.lng);
+    this.onKmChange();
+  }
+
   private async estimarKmHasta(dest: Lugar): Promise<void> {
-    const pos = await this.leerUbicacion();
-    const origenLat = pos.gps ? pos.lat : HUAMANTLA.lat;
-    const origenLng = pos.gps ? pos.lng : HUAMANTLA.lng;
-    this.api
-      .estimar({
-        origenLat,
-        origenLng,
-        destinoLat: dest.lat,
-        destinoLng: dest.lng,
-        destinoTexto: dest.etiqueta,
-      })
-      .subscribe({
-        next: (e) => {
-          this.kmCliente = Math.round((e.distanciaMetros / 1000) * 10) / 10;
-          this.cobroFijo = null;
-          this.onKmChange();
-        },
-        error: () => (this.error = 'No se pudo estimar la ruta.'),
-      });
+    this.estimandoRuta = true;
+    this.error = '';
+    this.okMsg = '';
+    try {
+      const pos = await this.leerUbicacion();
+      const origenLat = pos.gps ? pos.lat : HUAMANTLA.lat;
+      const origenLng = pos.gps ? pos.lng : HUAMANTLA.lng;
+      this.rutaOrigen = { lat: origenLat, lng: origenLng };
+      this.rutaDestino = dest;
+
+      const e = await firstValueFrom(
+        this.api.estimar({
+          origenLat,
+          origenLng,
+          destinoLat: dest.lat,
+          destinoLng: dest.lng,
+          destinoTexto: dest.etiqueta,
+        }),
+      );
+      this.kmIdaRuta = Math.round((e.distanciaMetros / 1000) * 10) / 10;
+      this.aplicarKmSegunTipoViaje();
+      await this.calcularVacíoTrasRuta();
+
+      const vacioTxt =
+        this.kmVacioRegreso > 0
+          ? this.viajeRedondo
+            ? ` · vacío punto→casa ${this.kmVacioRegreso} km`
+            : ` · vacío destino→casa ${this.kmVacioRegreso} km`
+          : this.casaLista
+            ? ''
+            : ' · marca casa para vacío';
+      this.okMsg = this.viajeRedondo
+        ? `Ida+vuelta ${this.kmCliente} km (${this.kmIdaRuta}×2)${vacioTxt}`
+        : `Ruta ${this.kmIdaRuta} km${vacioTxt}`;
+    } catch {
+      this.error = 'No se pudo estimar la ruta.';
+    } finally {
+      this.estimandoRuta = false;
+    }
   }
 
   private aplicarPrefillReserva(): void {
@@ -474,6 +651,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
     const estado: ViajeEstadoLocal = {
       fase: this.faseViaje,
       kmCliente: this.kmCliente,
+      kmClienteBase: this.kmClienteBase,
       kmVacioIda: this.kmVacioIda,
       kmVacioRegreso: this.kmVacioRegreso,
       modos: {
@@ -499,8 +677,10 @@ export class ViajeComponent implements OnInit, OnDestroy {
       const raw = localStorage.getItem(VIAJE_ESTADO_KEY);
       if (!raw) return;
       const s = JSON.parse(raw) as ViajeEstadoLocal;
-      this.faseViaje = s.fase || this.faseViaje;
+      const fasesOk: FaseViaje[] = ['vacio', 'con_cliente', 'elige_regreso', 'regreso_cliente', 'listo_cobro'];
+      this.faseViaje = fasesOk.includes(s.fase as FaseViaje) ? (s.fase as FaseViaje) : this.faseViaje;
       if (s.kmCliente != null) this.kmCliente = s.kmCliente;
+      this.kmClienteBase = s.kmClienteBase ?? this.kmClienteBase;
       this.kmVacioIda = s.kmVacioIda ?? this.kmVacioIda;
       this.kmVacioRegreso = s.kmVacioRegreso ?? this.kmVacioRegreso;
       if (s.modos) {
@@ -565,6 +745,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    if (this.geoDebounce) clearTimeout(this.geoDebounce);
     this.subs.unsubscribe();
     this.limpiarTick();
     this.detenerGps();
@@ -759,6 +940,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
     this.lastLat = null;
     this.lastLng = null;
     this.kmCliente = 0;
+    this.kmClienteBase = 0;
     this.kmVacioIda = 0;
     this.kmVacioRegreso = 0;
     this.faseViaje = clienteAqui ? 'con_cliente' : 'vacio';
@@ -828,7 +1010,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
 
   /** Marca que el cliente ya subió: cierra vacío ida y empieza km con él. */
   recogiCliente(): void {
-    if (!this.hayViaje || this.faseViaje === 'con_cliente') return;
+    if (!this.hayViaje || this.faseViaje !== 'vacio') return;
     this.feedback.tap();
     this.feedback.ok();
     this.pausarEspera();
@@ -837,6 +1019,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
     }
     this.metrosGps = 0;
     this.kmCliente = 0;
+    this.kmClienteBase = 0;
     this.lastLat = null;
     this.lastLng = null;
     this.faseViaje = 'con_cliente';
@@ -845,7 +1028,6 @@ export class ViajeComponent implements OnInit, OnDestroy {
       this.kmVacioIda > 0
         ? `Vacío ida ${this.kmVacioIda.toFixed(1)} km. Ahora cobra con el cliente.`
         : 'Cliente a bordo. El GPS cuenta el viaje.';
-    // Si el GPS sigue vivo, sigue midiendo; si ya había fallado, sigue manual
     if (!this.gpsFallo && !this.gpsActivo) {
       this.iniciarGps();
     }
@@ -853,10 +1035,106 @@ export class ViajeComponent implements OnInit, OnDestroy {
     this.persistirViajeEstado();
   }
 
+  /** Llegaste al destino / bajó el cliente. */
+  dejeCliente(): void {
+    if (!this.hayViaje) return;
+    if (this.faseViaje !== 'con_cliente' && this.faseViaje !== 'regreso_cliente') return;
+    this.feedback.tap();
+    this.feedback.ok();
+    this.pausarEspera();
+
+    // Congela km con cliente del tramo actual
+    if (!this.gpsFallo) {
+      const kmSeg = Math.round((this.metrosGps / 1000) * 100) / 100;
+      this.kmCliente = Math.round((this.kmClienteBase + kmSeg) * 100) / 100;
+    }
+    this.kmClienteBase = Math.max(0, Number(this.kmCliente) || 0);
+    this.metrosGps = 0;
+
+    if (this.faseViaje === 'regreso_cliente') {
+      // Segunda bajada: calcula vacío a casa y pasa a cobrar
+      void this.pasarAListoCobro('vuelta');
+      return;
+    }
+
+    this.faseViaje = 'elige_regreso';
+    this.error = '';
+    this.okMsg = `Ida ${this.kmClienteBase.toFixed(1)} km. ¿Regresas vacío o con el cliente?`;
+    this.recalcularVivo();
+    this.persistirViajeEstado();
+  }
+
+  /** Elige: regreso vacío → estima casa y muestra cobro. */
+  async elegirRegresoVacio(): Promise<void> {
+    if (!this.eligiendoRegreso) return;
+    this.feedback.tap();
+    this.viajeRedondo = false;
+    this.modoRegreso = this.modoRegreso === 'nada' ? 'nada' : this.modoRegreso;
+    await this.pasarAListoCobro('vacio');
+  }
+
+  /** Elige: regreso con cliente → GPS sigue midiendo km. */
+  elegirRegresoConCliente(): void {
+    if (!this.eligiendoRegreso) return;
+    this.feedback.tap();
+    this.feedback.ok();
+    this.viajeRedondo = true;
+    this.modoRegreso = 'completo';
+    this.metrosGps = 0;
+    this.lastLat = null;
+    this.lastLng = null;
+    this.faseViaje = 'regreso_cliente';
+    this.error = '';
+    this.okMsg = 'Vuelta con cliente. Cuando lo dejes otra vez toca “Ya dejé al cliente”.';
+    if (!this.gpsFallo && !this.gpsActivo) {
+      this.iniciarGps();
+    }
+    this.recalcularVivo();
+    this.persistirViajeEstado();
+  }
+
+  private async pasarAListoCobro(motivo: 'vacio' | 'vuelta'): Promise<void> {
+    this.accionando = true;
+    this.okMsg = 'Calculando vacío a casa…';
+    try {
+      const pos = await this.leerUbicacion();
+      const lat = pos.gps ? pos.lat : this.lastLat;
+      const lng = pos.gps ? pos.lng : this.lastLng;
+      if (lat != null && lng != null && (this.casaLista || this.leerCasaRaw())) {
+        this.kmVacioRegreso = await this.estimarKmVacioRegreso(lat, lng);
+        if (this.modoVacioRegreso === 'nada') {
+          this.modoVacioRegreso = 'mitad';
+        }
+      }
+    } catch {
+      /* sigue sin vacío */
+    }
+    this.faseViaje = 'listo_cobro';
+    this.accionando = false;
+    this.recalcularVivo();
+    this.persistirViajeEstado();
+    const vacio =
+      this.kmVacioRegreso > 0
+        ? ` · vacío a casa ${this.kmVacioRegreso} km × ${this.pctDe(this.modoVacioRegreso)}%`
+        : '';
+    this.okMsg =
+      motivo === 'vuelta'
+        ? `Ida+vuelta ${Number(this.kmCliente || 0).toFixed(1)} km${vacio}. Cobras ${this.cobroPreviewTxt}`
+        : `Ida ${Number(this.kmCliente || 0).toFixed(1)} km${vacio}. Cobras ${this.cobroPreviewTxt}`;
+  }
+
   corte(): void {
     if (!this.enCurso || this.accionando) return;
     if (this.faseViaje === 'vacio') {
       this.error = 'Primero marca “Recogí cliente” (o cancela si no lo encontraste).';
+      return;
+    }
+    if (this.faseViaje === 'con_cliente' || this.faseViaje === 'regreso_cliente') {
+      this.error = 'Marca “Ya dejé al cliente” cuando llegues.';
+      return;
+    }
+    if (this.faseViaje === 'elige_regreso') {
+      this.error = 'Elige si regresas vacío o con el cliente.';
       return;
     }
     if (this.kmCliente == null || this.kmCliente < 0) {
@@ -881,10 +1159,13 @@ export class ViajeComponent implements OnInit, OnDestroy {
         this.lastLat = pos.lat;
         this.lastLng = pos.lng;
       }
-      const lat = pos.gps ? pos.lat : this.lastLat;
-      const lng = pos.gps ? pos.lng : this.lastLng;
-      if (lat != null && lng != null) {
-        this.kmVacioRegreso = await this.estimarKmVacioRegreso(lat, lng);
+      // Si aún no hay vacío estimado, intenta ahora
+      if ((this.kmVacioRegreso || 0) <= 0) {
+        const lat = pos.gps ? pos.lat : this.lastLat;
+        const lng = pos.gps ? pos.lng : this.lastLng;
+        if (lat != null && lng != null) {
+          this.kmVacioRegreso = await this.estimarKmVacioRegreso(lat, lng);
+        }
       }
       this.ultimoDesglose = this.armarDesgloseTexto();
       const minEspera = Math.round((this.esperaSegundos / 60) * 100) / 100;
@@ -930,6 +1211,7 @@ export class ViajeComponent implements OnInit, OnDestroy {
   private finalizarCorteLocal(reservaId?: number): void {
     this.enCurso = null;
     this.faseViaje = 'vacio';
+    this.kmClienteBase = 0;
     this.gpsFallo = false;
     this.reservaIdActiva = undefined;
     this.limpiarEstadoLocal();
@@ -1225,10 +1507,12 @@ export class ViajeComponent implements OnInit, OnDestroy {
         const km = Math.round((this.metrosGps / 1000) * 100) / 100;
         if (this.faseViaje === 'vacio') {
           this.kmVacioIda = km;
-        } else {
-          this.kmCliente = km;
+        } else if (this.faseViaje === 'con_cliente' || this.faseViaje === 'regreso_cliente') {
+          this.kmCliente = Math.round((this.kmClienteBase + km) * 100) / 100;
         }
+        // elige_regreso / listo_cobro: no suma más km
         this.recalcularVivo();
+        if (this.hayViaje) this.persistirViajeEstado();
       } else if (d < 8) {
         return;
       }
