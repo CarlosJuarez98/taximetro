@@ -6,7 +6,7 @@ Ver **`BRANCHES.md`**.
 
 - Desarrollo en **`local`**.
 - Deploy desde **`prod`**.
-- **"sube a la nube"** = merge `local` → `prod` + `scripts/deploy-nube.ps1` (código; sin sync de datos).
+- **"sube / lleva a la nube"** = merge `local` → `prod` (**sin** deploy; tú corres `deploy-nube.bat`). Sin sync de datos.
 
 ## Stack en la VM
 

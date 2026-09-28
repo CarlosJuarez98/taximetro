@@ -7,8 +7,8 @@
 
 ## Flujo
 1. Trabajas en **`local`**.
-2. Cuando digas **"sube a la nube"**:
+2. Cuando digas **"sube a la nube"** / **"lleva a la nube"**:
    - merge `local` → `prod`
-   - deploy de **código** desde el estado `prod`
+   - **sin** deploy automático — tú corres `deploy-nube.bat` o `SUBIR-A-LA-NUBE.bat`
    - **sin** sync de datos (local = pruebas; nube = datos reales)
 3. No hagas cambios solo-prod en `local` salvo configs compartidas (proxy + `/api` relativo).
