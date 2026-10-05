@@ -15,6 +15,7 @@ import { AuthService } from './auth.service';
 import { FeedbackService } from './feedback.service';
 import { RecordatorioService } from './recordatorio.service';
 import { OfflineQueueService } from './offline-queue.service';
+import { AppUpdateService } from './app-update.service';
 
 @Component({
   selector: 'app-root',
@@ -28,6 +29,7 @@ export class AppComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly avisos = inject(RecordatorioService);
   private readonly offline = inject(OfflineQueueService);
+  private readonly appUpdate = inject(AppUpdateService);
   readonly feedback = inject(FeedbackService);
 
   esLogin = false;
@@ -146,6 +148,11 @@ export class AppComponent implements OnInit {
           typeof msg === 'string' && msg.length < 160 ? msg : 'No se pudo cambiar la contraseña';
       },
     });
+  }
+
+  actualizarApp(): void {
+    this.feedback.tap();
+    void this.appUpdate.forzarRefresh();
   }
 
   salir(): void {
