@@ -14,9 +14,14 @@
       </div>
       @if (sesionActiva) {
         <div class="top-acciones">
-          <button type="button" class="btn-salir" (click)="actualizarApp()" title="Descargar última versión">
-            Actualizar
-          </button>
+          @if (appUpdate.updateDisponible()) {
+            <button type="button" class="btn-salir" (click)="actualizarApp()" title="Descargar última versión">
+              Actualizar
+              @if (appUpdate.versionNueva(); as ver) {
+                <span>v{{ ver }}</span>
+              }
+            </button>
+          }
           <button type="button" class="btn-salir" (click)="abrirCambioPassword()" title="Cambiar contraseña">
             Clave
           </button>

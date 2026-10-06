@@ -29,7 +29,7 @@ export class AppComponent implements OnInit {
   private readonly router = inject(Router);
   private readonly avisos = inject(RecordatorioService);
   private readonly offline = inject(OfflineQueueService);
-  private readonly appUpdate = inject(AppUpdateService);
+  readonly appUpdate = inject(AppUpdateService);
   readonly feedback = inject(FeedbackService);
 
   esLogin = false;
@@ -152,7 +152,7 @@ export class AppComponent implements OnInit {
 
   actualizarApp(): void {
     this.feedback.tap();
-    void this.appUpdate.forzarRefresh();
+    this.appUpdate.aplicarActualizacion();
   }
 
   salir(): void {
